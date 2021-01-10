@@ -1,0 +1,30 @@
+<html>
+    <head>
+        <title>Chatter</title>
+        <link href="/css/multipageStyles.css" rel="stylesheet"></link>
+        <link id="stylesheet" href="/css/chatsStyle.css" rel="stylesheet"></link>
+        <script id="script" src="/js/chatsMain.js"></script>
+    </head>
+    <body>
+        <div id="preloader"><img src="/assets/preloader.svg"></div>
+        <div id="container">
+            <div id="chats-panel">
+                <div class="chat-button" id="add-chat-button">+</div>
+            </div>
+            <div id="sub-panel" class="no"></div>
+            <div id="chat-container">
+                <div id="chat-header">
+                    <div id="chat-title">
+                        <div id="chat-name"></div>
+                        <div id="members">
+                            <span id="members-count"></span> Members
+                        </div>
+                    </div>
+                </div>
+                <div id="plug"></div>
+                <div id="chat-contents"></div>
+                <div class="not-touched" id="message-input" contenteditable="true">Start typing message...</div>
+            </div>
+        </div>
+    </body>
+</html>

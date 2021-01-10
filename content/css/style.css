@@ -1,0 +1,210 @@
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+
+    background-color: #323280;
+}
+
+#container {
+    height: 100%;
+    width: 100%;
+
+    display: flex;
+    justify-content: center;
+}
+
+#menu-container {
+    width: 545px;
+    height: 280px;
+
+    margin-top: 140px;
+
+    background-color: #5959de;
+    border-radius: 20px;
+    box-shadow: 10px 10px 20px 1px rgba(0, 0, 0, 0.75);
+    
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    overflow: hidden;
+}
+
+#menu {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    transition: .3s;
+}
+
+#menu.relative {
+    position: relative;
+    display: block;
+
+    height: 100%;
+    width: 100%;
+}
+
+#menu.row-flex {
+    display: flex;
+    flex-direction: row;
+}
+
+#menu.hidden {
+    opacity: 0;
+}
+
+.button {
+    background-color: white;
+    border: none;
+    border-radius: 20px;
+
+    font-family: 'Roboto Condensed', sans-serif;
+    color: rgba(0, 0, 0, .85);
+
+    cursor: pointer;
+    transition: .2s;
+}
+
+.button:focus {
+    outline: none;
+}
+
+.button:hover {
+    transform: scale(1.05, 1.05);
+    box-shadow: 2px 2px 5px 1px rgba(0, 0, 0, 0.75);
+}
+
+.button:hover:active {
+    transform: none;
+    box-shadow: none;
+}
+
+#login-button {
+    width: 435px;
+    height: 78px;
+
+    font-size: 36px;
+}
+
+#register-button {
+    width: 299px;
+    height: 54px;
+
+    margin-top: 40px;
+
+    font-size: 27px;
+}
+
+#back-button {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+
+    cursor: pointer;
+    transition: .2s;
+}
+
+#back-button:hover {
+    transform: scale(1.05, 1.05);
+}
+
+#dialog-container {
+    position: absolute;
+    top: 117px;
+    left: 32px;
+
+    margin-right: 20px;
+    max-width: 210px;
+    text-align: center;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#dialog-container.upper {
+    top: 100px;
+}
+
+#menu.row-flex > #dialog-container {
+    position: initial;
+}
+
+#info-message {
+    color: #ffffff;
+    margin: 0;
+    /* margin-right: 20px; */
+    font-size: 20px;
+}
+
+#go-home-button {
+    margin-top: 20px;
+    width: 156px;
+    height: 40px;
+    font-size: 18px;
+}
+
+#go-back-button {
+    margin-top: 10px;
+    width: 156px;
+    height: 40px;
+    font-size: 18px;
+}
+
+#prompt {
+    color: #ffffff;
+    font-size: 20px;
+    margin: 0;
+}
+
+.credentials-input {
+    width: 209px;
+    height: 48px;
+
+    margin-top: 10px;
+    border-radius: 20px;
+    border: none;
+    text-align: center;
+    font-size: 18px;
+    color: rgba(0, 0, 0, .85);
+}
+
+.credentials-input:focus {
+    outline: none;
+}
+
+#register-input {
+    margin-top: 10px;
+}
+
+#next-button {
+    position: absolute;
+    top: 0;
+    right: 0;
+
+    cursor: pointer;
+    transition: opacity .5s, transform .3s;
+}
+
+#next-button:hover {
+    transform: scale(1.05, 1.05);
+}
+
+#next-button:hover:active {
+    transform: none;
+}
+
+#next-button.not-allowed {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+#next-button.not-allowed:hover {
+    transform: none;
+}

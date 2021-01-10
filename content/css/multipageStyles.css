@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed&display=swap');
+
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+
+    font-family: 'Roboto Condensed';
+}
+
+body {
+    overflow-y: hidden;
+}
+
+#preloader {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #4949de;
+    transition: .3s;
+    z-index: -1;
+}
+
+#preloader.hidden {
+    opacity: 0;
+}
+
+#preloader.prepared {
+    z-index: 100;
+}
+
