@@ -514,7 +514,6 @@ func (db *DB) GetChatMembers(chatId int) ([]ChatMember, error) {
 	return members, nil
 }
 
-/* TODO: THIS FUNCTION's IMPLEMENTATION NOT CORRECT */
 func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool) ([]Message, error) {
 	var query string
 	if withUsernames {
@@ -536,7 +535,6 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 				"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
 				"ORDER BY messages.message_id DESC " +
 				"LIMIT ?"
-
 	}
 
 	rows, err := db.Conn.Query(query, chatId, chatId, offset, messagesCount)
