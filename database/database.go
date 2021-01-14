@@ -538,7 +538,7 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 }
 
 func (db *DB) GetMessage(chatId, messageId int) (*Message, error) {
-	query := "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
+	query := "SELECT chat_id, message_id, sender_id, ts, text " +
 		"FROM messages " +
 		"WHERE chat_id = ? AND message_id = ?"
 	messageRow := db.Conn.QueryRow(query, chatId, messageId)
@@ -550,4 +550,13 @@ func (db *DB) GetMessage(chatId, messageId int) (*Message, error) {
 	}
 
 	return message, nil
+}
+
+func (db *DB) DeleteMessage(chatId, messageId int) error {
+	query := "DELETE FROM messages " +
+		"WHERE chat_id = ? AND message_id = ? " +
+		"LIMIT 1"
+	_, err := db.Conn.Exec(query, chatId, messageId)
+
+	return err
 }
