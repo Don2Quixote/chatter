@@ -65,15 +65,12 @@ window.chatsPageScript = async function chatsPageScript() {
 
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        console.log(e);
-        console.log(e.composedPath());
         let contextMenuInPath = e.composedPath().find(element => element.classList ? element.id == 'context-menu' : false);
         let messageInPath = e.composedPath().find(element => element.classList ? element.classList.contains('message') : false);
         if (contextMenuInPath) {
             return;
         } else if (messageInPath) {
-            console.log(messageInPath);
-            buildMessageContextMenu(e.clientX, e.clientY, messageInPath.dataset.chatId, messageInPath.dataset.messageId);
+            buildMessageContextMenu(e.clientX, e.clientY, messageInPath.dataset.chatId, messageInPath.dataset.messageId, messageInPath.dataset.senderId);
         } else {
             buildGlobalContextMenu(e.clientX, e.clientY);
         }
@@ -86,7 +83,8 @@ window.chatsPageScript = async function chatsPageScript() {
     let cachedUsers = new Map;
     let accessKey = localStorage.getItem('accessKey');
 
-    let activeChat = null;
+    let activeChatId = null;
+    let activeChatOwnerId = null;
     let activeUserId = null;
 
     let liveUpdates;
@@ -99,9 +97,20 @@ window.chatsPageScript = async function chatsPageScript() {
     }
     liveUpdates.addEventListener('error', console.log);
     liveUpdates.addEventListener('newMessage', function(newMessage) {
-        if (activeChat == newMessage.chatId) appendNewMessage(newMessage);
+        console.log(newMessage);
+        if (activeChatId == newMessage.chatId) appendNewMessage(newMessage);
         notify(newMessage.chatId);
     });
+    liveUpdates.addEventListener('messagesDeleted', function(eventData) {
+        console.log(eventData);
+        if (eventData.chatId == activeChatId) {
+            console.log('here');
+            for (let messageId of eventData.deletedMessageIds) {
+                removeDeletedMessage(eventData.chatId, messageId);
+            }
+        }
+        
+    })
 
     messageInput.addEventListener('focus', function() {
         if (messageInput.classList.contains('not-touched')) {
@@ -128,7 +137,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 if (!sendingMessage) {
                     sendingMessage = true;
                     try {
-                        let response = await sendMessage(activeChat, trimmedMessageText);
+                        let response = await sendMessage(activeChatId, trimmedMessageText);
                         let responseData = await response.json();
                         if (responseData.error) {
                             throw responseData.error;
@@ -145,7 +154,6 @@ window.chatsPageScript = async function chatsPageScript() {
     messageInput.addEventListener('input', async function(e) {
         if (this.innerText.length >= 2048) {
             this.innerText = this.innerText.slice(0, 2048);
-            console.log(this.scrollHeight);
             await delay(50);
             this.scrollTop = this.scrollHeight;
         }
@@ -284,7 +292,8 @@ window.chatsPageScript = async function chatsPageScript() {
         chatContainer.dataset.chatId = chat.id;
         chatContainer.replaceChild(chatContents, oldChatContents);
 
-        activeChat = chat.id;
+        activeChatId = chat.id;
+        activeChatOwnerId = chat.ownerId;
 
         let chatNameElement = document.getElementById('chat-name');
         let membersCountElement = document.getElementById('members-count');
@@ -299,7 +308,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 let firstMessage = messages[0];
                 if (messages.length && +firstMessage.dataset.messageId != 1) {
                     let offset = +lastMessage.dataset.messageId - firstMessage.dataset.messageId + 1;
-                    loadMessages(activeChat, offset, 20, true);
+                    loadMessages(activeChatId, offset, 20, true);
                 }
             }
         });
@@ -312,7 +321,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 let firstMessage = messages[0];
                 if (messages.length && +firstMessage.dataset.messageId != 1) {
                     let offset = +lastMessage.dataset.messageId - firstMessage.dataset.messageId + 1;
-                    loadMessages(activeChat, offset, 20, true);
+                    loadMessages(activeChatId, offset, 20, true);
                 }
             }
             lastScrollTop = newScrollTop;
@@ -354,6 +363,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.innerText = messages[messageItr2].text;
                         messageElement.dataset.chatId = messages[messageItr2].chatId;
                         messageElement.dataset.messageId = messages[messageItr2].id;
+                        messageElement.dataset.senderId = messages[messageItr2].senderId;
                         
                         messagesBodyElement.insertAdjacentElement('afterbegin', messageElement);
                         messageItr1 = messageItr2;
@@ -413,7 +423,7 @@ window.chatsPageScript = async function chatsPageScript() {
             if (chatButton.dataset.chatId == chatId) {
                 chatsPanel.removeChild(chatButton);
                 chatsPanel.insertAdjacentElement('afterbegin', chatButton);
-                if (activeChat != chatId) {
+                if (activeChatId != chatId) {
                     chatButton.classList.add('new-message');
                 }
             }
@@ -440,6 +450,7 @@ window.chatsPageScript = async function chatsPageScript() {
             messageElement.innerText = newMessage.text;
             messageElement.dataset.chatId = newMessage.chatId;
             messageElement.dataset.messageId = newMessage.messageId;
+            messageElement.dataset.senderId = newMessage.senderId;
 
             messagesBody.appendChild(messageElement);
 
@@ -486,6 +497,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.innerText = newMessage.text;
                         messageElement.dataset.chatId = newMessage.chatId;
                         messageElement.dataset.messageId = newMessage.messageId;
+                        messageElement.dataset.senderId = newMessage.senderId;
 
                     messagesBodyElement.appendChild(messageElement);
 
@@ -526,6 +538,39 @@ window.chatsPageScript = async function chatsPageScript() {
 
         if (newMessage.senderId == activeUserId || wasInTheBottom) {
             chatContents.scrollTop = chatContents.scrollHeight;
+        }
+    }
+
+    function removeDeletedMessage(chatId, messageId) {
+        if (activeChatId != chatId) return;
+        
+        let messageElement = [...document.getElementsByClassName('message')].find(m => m.dataset.messageId == messageId);
+        if (messageElement) {
+            let messagesStretchElement = messageElement.parentElement.parentElement.parentElement;
+            let messagesCount = messagesStretchElement.getElementsByClassName('message').length;
+            console.log(messagesCount);
+            if (messagesCount == 1) {
+                messagesStretchElement.parentElement.removeChild(messagesStretchElement);
+            } else if (messagesCount == 2) {
+                messageElement.parentElement.removeChild(messageElement);
+
+                let firstMessageSentTimeElement = messagesStretchElement.getElementsByClassName('first-message-sent-time')[0];
+                let sentTimeSeparatorElement = messagesStretchElement.getElementsByClassName('sent-time-separator')[0];
+                let lastMessageSentTimeElement = messagesStretchElement.getElementsByClassName('last-message-sent-time')[0];
+
+                let lastMessageInStretchElement = messagesStretchElement.getElementsByClassName('message')[0];
+                console.log(parseInt(lastMessageInStretchElement.dataset.messageId));
+                if (parseInt(lastMessageInStretchElement.dataset.messageId) > messageId) {
+                    firstMessageSentTimeElement.parentElement.removeChild(firstMessageSentTimeElement);
+                    lastMessageSentTimeElement.classList = 'one-message-sent-time';
+                } else {
+                    lastMessageSentTimeElement.parentElement.removeChild(lastMessageSentTimeElement);
+                    firstMessageSentTimeElement.classList = 'one-message-sent-time';
+                }
+                sentTimeSeparatorElement.parentElement.removeChild(sentTimeSeparatorElement);
+            } else {
+                messageElement.parentElement.removeChild(messageElement);
+            }
         }
     }
 
@@ -589,6 +634,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.innerText = oldMessage.text;
                 messageElement.dataset.chatId = oldMessage.chatId;
                 messageElement.dataset.messageId = oldMessage.id;
+                messageElement.dataset.senderId = oldMessage.senderId;
 
                 messagesBody.insertAdjacentElement('afterbegin', messageElement);
 
@@ -635,6 +681,7 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.innerText = oldMessage.text;
                             messageElement.dataset.chatId = oldMessage.chatId;
                             messageElement.dataset.messageId = oldMessage.id;
+                            messageElement.dataset.senderId = oldMessage.senderId;
 
                         messagesBodyElement.appendChild(messageElement);
 
@@ -1050,7 +1097,7 @@ window.chatsPageScript = async function chatsPageScript() {
         document.body.addEventListener('click', removeContextMenuElement);
     }
 
-    function buildMessageContextMenu(x, y, chatId, messageId) {
+    function buildMessageContextMenu(x, y, chatId, messageId, senderId) {
         let oldContextMenuElement = document.getElementById('context-menu');
         if (oldContextMenuElement) {
             document.body.removeChild(oldContextMenuElement);
@@ -1061,15 +1108,17 @@ window.chatsPageScript = async function chatsPageScript() {
         contextMenuElement.style.left = `${x}px`;
         contextMenuElement.style.top = `${y}px`;
 
-            let deleteMessageButton = document.createElement('div');
-            deleteMessageButton.classList = 'context-menu-button';
-            deleteMessageButton.innerText = 'Delete message';
-            deleteMessageButton.addEventListener('click', function() {
-                deleteMessage(chatId, messageId);
-                removeContextMenuElement(true);
-            });
+            if (senderId == activeUserId || activeChatOwnerId == activeUserId) {
+                let deleteMessageButton = document.createElement('div');
+                deleteMessageButton.classList = 'context-menu-button';
+                deleteMessageButton.innerText = 'Delete message';
+                deleteMessageButton.addEventListener('click', function() {
+                    deleteMessages(chatId, [messageId]);
+                    removeContextMenuElement(true);
+                });
 
-        contextMenuElement.appendChild(deleteMessageButton);
+                contextMenuElement.appendChild(deleteMessageButton);
+            }
 
         document.body.appendChild(contextMenuElement);
 
@@ -1160,8 +1209,22 @@ window.chatsPageScript = async function chatsPageScript() {
         return parsed.chat;
     }
 
-    async function deleteMessage(chatId, messageId) {
-        console.log(chatId, messageId);
+    async function deleteMessages(chatId, messageIds) {
+        let response = await fetch(`/deleteMessages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': accessKey
+            },
+            body: JSON.stringify({
+                chatId: parseInt(chatId),
+                messageIds: messageIds.map(id => parseInt(id))
+            })
+        });
+        let parsed = await response.json();
+        if (parsed.error) {
+            throw parsed;
+        }
+        return parsed.success;
     }
 
     function deleteCookie(cookieName) {

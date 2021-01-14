@@ -526,6 +526,115 @@ func handleCreateChat(response http.ResponseWriter, request *http.Request) {
 	jsonEncoder.Encode(responseStruct)
 }
 
+func handleDeleteMessages(response http.ResponseWriter, request *http.Request) {
+	if request.Method != "POST" {
+		io.WriteString(response, `{"error":"Wrong method"}`)
+		return
+	}
+
+	db, authorized, userId := checkAccessKey(response, request)
+	if !authorized {
+		return
+	}
+	defer db.Close()
+	log.Println("user", userId)
+
+	var dataStruct struct {
+		ChatId     int   `json:"chatId"`
+		MessageIds []int `json:"messageIds"`
+	}
+	jsonDecoder := json.NewDecoder(request.Body)
+	err := jsonDecoder.Decode(&dataStruct)
+	if err != nil {
+		log.Println(err)
+		io.WriteString(response, `{"error":"Can't parse json"}`)
+		return
+	}
+	log.Println("data", dataStruct)
+
+	deletedMessageIds := []int{}
+	responseSent := false
+	for _, messageId := range dataStruct.MessageIds {
+		log.Println("deleteting", messageId)
+		message, err := db.GetMessage(dataStruct.ChatId, messageId)
+		if err != nil {
+			log.Println(err)
+			responseSent = true
+			io.WriteString(response, `{"error":"Message not found"}`)
+			break
+		}
+
+		if message.SenderId != userId {
+			var chat *database.ChatInformation
+			chat, err = db.GetChat(userId, dataStruct.ChatId, false, false)
+			if err != nil {
+				log.Println(err)
+				responseSent = true
+				io.WriteString(response, `{"error":"Chat not found"}`)
+				break
+			}
+			if chat.OwnerId != userId {
+				log.Println(err)
+				responseSent = true
+				io.WriteString(response, `{"error":"Access denied"}`)
+				break
+			}
+		}
+
+		err = db.DeleteMessage(dataStruct.ChatId, messageId)
+		if err != nil {
+			log.Println(err)
+			responseSent = true
+			io.WriteString(response, `{"error":"Server Internal Error"}`)
+			break
+		}
+		deletedMessageIds = append(deletedMessageIds, messageId)
+	}
+	log.Println("response sent -", responseSent)
+
+	if !responseSent {
+		responseStruct := struct {
+			Success bool `json:"success"`
+		}{true}
+
+		encoder := json.NewEncoder(response)
+		encoder.Encode(responseStruct)
+	}
+
+	if eventBus, exists := eventBus.Chats[dataStruct.ChatId]; exists {
+		eventBus.Mutex.Lock()
+
+		var message struct {
+			Event     string `json:"event"`
+			EventData struct {
+				ChatId            int   `json:"chatId"`
+				DeletedMessageIds []int `json:"deletedMessageIds"`
+			} `json:"eventData"`
+		}
+		message.Event = "messagesDeleted"
+		message.EventData.ChatId = dataStruct.ChatId
+		message.EventData.DeletedMessageIds = deletedMessageIds
+		jsonMessage, err := json.Marshal(message)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		log.Println("message", message)
+
+		wg := sync.WaitGroup{}
+		for _, subscriber := range eventBus.Sockets {
+			wg.Add(1)
+			go func(subscriber *ws.Conn) {
+				subscriber.WriteMessage(ws.TextMessage, jsonMessage)
+				wg.Done()
+			}(subscriber)
+		}
+		wg.Wait()
+
+		eventBus.Mutex.Unlock()
+	}
+}
+
 var upgrader = ws.Upgrader{
 	ReadBufferSize:  512,
 	WriteBufferSize: 512,
@@ -651,7 +760,7 @@ func logEventBus() {
 func main() {
 	eventBus.Chats = make(map[int]*subEventBus)
 
-	go logEventBus()
+	// go logEventBus()
 
 	db, err := openSqlConnection()
 	if err != nil {
@@ -690,6 +799,7 @@ func main() {
 	http.HandleFunc("/getMessages", handleGetMessages)
 	http.HandleFunc("/enterChat", handleEnterChat)
 	http.HandleFunc("/createChat", handleCreateChat)
+	http.HandleFunc("/deleteMessages", handleDeleteMessages)
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {

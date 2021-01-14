@@ -533,7 +533,6 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 			messages = append(messages, m)
 		}
 	}
-
 	return messages, nil
 }
 
@@ -557,6 +556,12 @@ func (db *DB) DeleteMessage(chatId, messageId int) error {
 		"WHERE chat_id = ? AND message_id = ? " +
 		"LIMIT 1"
 	_, err := db.Conn.Exec(query, chatId, messageId)
+	if err != nil {
+		return err
+	}
+
+	query = "UPDATE chats SET messages_count = messages_count - 1 WHERE id = ?"
+	_, err = db.Conn.Exec(query, chatId)
 
 	return err
 }
