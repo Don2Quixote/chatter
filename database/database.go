@@ -538,7 +538,16 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 }
 
 func (db *DB) GetMessage(chatId, messageId int) (*Message, error) {
-	// query := ""
+	query := "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
+		"FROM messages " +
+		"WHERE chat_id = ? AND message_id = ?"
+	messageRow := db.Conn.QueryRow(query, chatId, messageId)
 
-	return nil, nil
+	message := new(Message)
+	err := messageRow.Scan(&message.ChatId, &message.Id, &message.SenderId, &message.Ts, &message.Text)
+	if err != nil {
+		return nil, err
+	}
+
+	return message, nil
 }
