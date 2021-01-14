@@ -24,14 +24,13 @@ func (db *DB) InitDatabase() error {
 		err   error
 	)
 
-	query =
-		"CREATE TABLE IF NOT EXISTS users ( " +
-			"id INT AUTO_INCREMENT PRIMARY KEY , " +
-			"username VARCHAR(16) COLLATE utf8_bin UNIQUE, " +
-			"register_ts INT, " +
-			"hash VARCHAR(64), " +
-			"auth_done BOOLEAN " +
-			"); "
+	query = "CREATE TABLE IF NOT EXISTS users ( " +
+		"id INT AUTO_INCREMENT PRIMARY KEY , " +
+		"username VARCHAR(16) COLLATE utf8_bin UNIQUE, " +
+		"register_ts INT, " +
+		"hash VARCHAR(64), " +
+		"auth_done BOOLEAN " +
+		"); "
 	_, err = db.Conn.Exec(query)
 	if err != nil {
 		return err
@@ -45,61 +44,57 @@ func (db *DB) InitDatabase() error {
 		return err
 	}
 
-	query =
-		"CREATE TABLE IF NOT EXISTS chats ( " +
-			"id INT AUTO_INCREMENT PRIMARY KEY, " +
-			"owner_id INT, " +
-			"name VARCHAR(64) COLLATE utf8_bin UNIQUE, " +
-			"create_ts INT, " +
-			"hash VARCHAR(64), " +
-			"last_message_ts INT, " +
-			"messages_count INT, " +
-			"members_count INT, " +
-			"FOREIGN KEY (owner_id) REFERENCES users (id) " +
-			"); "
+	query = "CREATE TABLE IF NOT EXISTS chats ( " +
+		"id INT AUTO_INCREMENT PRIMARY KEY, " +
+		"owner_id INT, " +
+		"name VARCHAR(64) COLLATE utf8_bin UNIQUE, " +
+		"create_ts INT, " +
+		"hash VARCHAR(64), " +
+		"last_message_ts INT, " +
+		"messages_count INT, " +
+		"members_count INT, " +
+		"FOREIGN KEY (owner_id) REFERENCES users (id) " +
+		"); "
 	_, err = db.Conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	query =
-		"CREATE TABLE IF NOT EXISTS chats_members ( " +
-			"chat_id INT, " +
-			"member_id INT, " +
-			"is_owner BOOLEAN, " +
-			"PRIMARY KEY (chat_id, member_id), " +
-			"FOREIGN KEY (chat_id) REFERENCES chats (id), " +
-			"FOREIGN KEY (member_id) REFERENCES users (id) " +
-			");"
+	query = "CREATE TABLE IF NOT EXISTS chats_members ( " +
+		"chat_id INT, " +
+		"member_id INT, " +
+		"is_owner BOOLEAN, " +
+		"PRIMARY KEY (chat_id, member_id), " +
+		"FOREIGN KEY (chat_id) REFERENCES chats (id), " +
+		"FOREIGN KEY (member_id) REFERENCES users (id) " +
+		");"
 	_, err = db.Conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	query =
-		"CREATE TABLE IF NOT EXISTS access_keys ( " +
-			"user_id INT, " +
-			"death_ts INT, " +
-			"hash VARCHAR(64), " +
-			"PRIMARY KEY (user_id, death_ts), " +
-			"FOREIGN KEY (user_id) REFERENCES users (id) " +
-			"); "
+	query = "CREATE TABLE IF NOT EXISTS access_keys ( " +
+		"user_id INT, " +
+		"death_ts INT, " +
+		"hash VARCHAR(64), " +
+		"PRIMARY KEY (user_id, death_ts), " +
+		"FOREIGN KEY (user_id) REFERENCES users (id) " +
+		"); "
 	_, err = db.Conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	query =
-		"CREATE TABLE IF NOT EXISTS messages ( " +
-			"chat_id INT, " +
-			"message_id INT AUTO_INCREMENT, " +
-			"sender_id INT, " +
-			"ts INT, " +
-			"text VARCHAR(2048), " +
-			"PRIMARY KEY (chat_id, message_id), " +
-			"FOREIGN KEY (chat_id) REFERENCES chats (id), " +
-			"FOREIGN KEY (sender_id) REFERENCES users (id) " +
-			") ENGINE=MyISAM; "
+	query = "CREATE TABLE IF NOT EXISTS messages ( " +
+		"chat_id INT, " +
+		"message_id INT AUTO_INCREMENT, " +
+		"sender_id INT, " +
+		"ts INT, " +
+		"text VARCHAR(2048), " +
+		"PRIMARY KEY (chat_id, message_id), " +
+		"FOREIGN KEY (chat_id) REFERENCES chats (id), " +
+		"FOREIGN KEY (sender_id) REFERENCES users (id) " +
+		") ENGINE=MyISAM; "
 	_, err = db.Conn.Exec(query)
 	if err != nil {
 		return err
@@ -107,9 +102,8 @@ func (db *DB) InitDatabase() error {
 
 	/* If database just created */
 	if usersCount == 0 {
-		query =
-			"INSERT INTO users VALUES " +
-				"(0, 'starterBot', 0, 'my-hash-is-unhackable', 1)"
+		query = "INSERT INTO users VALUES " +
+			"(0, 'starterBot', 0, 'my-hash-is-unhackable', 1)"
 		result, err := db.Conn.Exec(query)
 		if err != nil {
 			return err
@@ -121,14 +115,12 @@ func (db *DB) InitDatabase() error {
 			return err
 		}
 
-		starterChatMessage1 :=
-			"Hello! Cool that you registered!\n " +
-				"I created this chat in case you are alone and there is no people you could talk to. " +
-				"I will listen to you, but won’t answer."
-		starterChatMessage2 :=
-			"If you not alone and have people to talk to, " +
-				"you may be interested in how to create your own chat. " +
-				"Here is the answer: on the left panel there is the button with «+» sign."
+		starterChatMessage1 := "Hello! Cool that you registered!\n " +
+			"I created this chat in case you are alone and there is no people you could talk to. " +
+			"I will listen to you, but won’t answer."
+		starterChatMessage2 := "If you not alone and have people to talk to, " +
+			"you may be interested in how to create your own chat. " +
+			"Here is the answer: on the left panel there is the button with «+» sign."
 
 		db.AddMessage(starterChatId, int(starterBotId), starterChatMessage1)
 		db.AddMessage(starterChatId, int(starterBotId), starterChatMessage2)
@@ -138,10 +130,9 @@ func (db *DB) InitDatabase() error {
 }
 
 func (db *DB) RegisterUser(username, password string) (int, error) {
-	query :=
-		"INSERT INTO users " +
-			"(`username`, `register_ts`, `hash`, `auth_done`) " +
-			"VALUES (?, ?, ?, FALSE)"
+	query := "INSERT INTO users " +
+		"(`username`, `register_ts`, `hash`, `auth_done`) " +
+		"VALUES (?, ?, ?, FALSE)"
 
 	registerTs := int(time.Now().Unix())
 	hash := sha256.Sum256([]byte(username + strconv.Itoa(registerTs) + password))
@@ -167,9 +158,8 @@ type User struct {
 }
 
 func (db *DB) GetUser(userId int) (User, bool) {
-	query :=
-		"SELECT username, register_ts " +
-			"FROM users WHERE id = ?"
+	query := "SELECT username, register_ts " +
+		"FROM users WHERE id = ?"
 	row := db.Conn.QueryRow(query, userId)
 
 	user := User{userId, "", 0}
@@ -183,9 +173,8 @@ func (db *DB) GetUser(userId int) (User, bool) {
 }
 
 func (db *DB) CreateAccessKey(username, password string) (string, int, error) {
-	query :=
-		"SELECT id, register_ts, hash, auth_done " +
-			"FROM users WHERE username = ?"
+	query := "SELECT id, register_ts, hash, auth_done " +
+		"FROM users WHERE username = ?"
 	queryResult := db.Conn.QueryRow(query, username)
 
 	var (
@@ -228,9 +217,8 @@ func (db *DB) CreateAccessKey(username, password string) (string, int, error) {
 }
 
 func (db *DB) ValidateAccessKey(key string) (keyExists bool, userId int) {
-	query :=
-		"SELECT user_id, death_ts, hash " +
-			"FROM access_keys WHERE hash = ?"
+	query := "SELECT user_id, death_ts, hash " +
+		"FROM access_keys WHERE hash = ?"
 	queryResult := db.Conn.QueryRow(query, key)
 
 	var keyData struct {
@@ -248,10 +236,9 @@ func (db *DB) ValidateAccessKey(key string) (keyExists bool, userId int) {
 }
 
 func (db *DB) CreateChat(ownerId int, name string, password string) (int, error) {
-	query :=
-		"INSERT INTO chats " +
-			"(`owner_id`, `name`, `create_ts`, `hash`, `last_message_ts`, `messages_count`, `members_count`) " +
-			"VALUES (?, ?, ?, ?, ?, 0, 0)"
+	query := "INSERT INTO chats " +
+		"(`owner_id`, `name`, `create_ts`, `hash`, `last_message_ts`, `messages_count`, `members_count`) " +
+		"VALUES (?, ?, ?, ?, ?, 0, 0)"
 
 	ts := int(time.Now().Unix())
 	hash := sha256.Sum256([]byte(name + strconv.Itoa(ts) + password))
@@ -313,18 +300,16 @@ func (db *DB) EnterChat(userId int, chatName, ChatPassword string) (int, error) 
 }
 
 func (db *DB) addChatMember(chatId, userId int, isOwner bool) error {
-	query :=
-		"INSERT INTO chats_members VALUES " +
-			"(?, ?, ?)"
+	query := "INSERT INTO chats_members VALUES " +
+		"(?, ?, ?)"
 	_, err := db.Conn.Exec(query, chatId, userId, isOwner)
 	if err != nil {
 		return err
 	}
 
-	query =
-		"UPDATE chats " +
-			"SET members_count = members_count + 1 " +
-			"WHERE id = ?"
+	query = "UPDATE chats " +
+		"SET members_count = members_count + 1 " +
+		"WHERE id = ?"
 	_, err = db.Conn.Exec(query, chatId)
 	if err != nil {
 		return err
@@ -343,10 +328,9 @@ func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 		return 0, errors.New("Max message length is 2048")
 	}
 
-	query :=
-		"INSERT INTO messages " +
-			"(`chat_id`, `sender_id`, `ts`, `text`) " +
-			"VALUES (?, ?, ?, ?)"
+	query := "INSERT INTO messages " +
+		"(`chat_id`, `sender_id`, `ts`, `text`) " +
+		"VALUES (?, ?, ?, ?)"
 
 	ts := time.Now().Unix()
 	result, err := db.Conn.Exec(query, chatId, senderId, ts, text)
@@ -359,12 +343,11 @@ func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 		return 0, err
 	}
 
-	query =
-		"UPDATE chats " +
-			"SET " +
-			"messages_count = messages_count + 1, " +
-			"last_message_ts = ? " +
-			"WHERE id = ?"
+	query = "UPDATE chats " +
+		"SET " +
+		"messages_count = messages_count + 1, " +
+		"last_message_ts = ? " +
+		"WHERE id = ?"
 
 	result, err = db.Conn.Exec(query, ts, chatId)
 	if err != nil {
@@ -375,9 +358,8 @@ func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 }
 
 func (db *DB) IsUserInChat(userId, chatId int) bool {
-	query :=
-		"SELECT member_id FROM chats_members " +
-			"WHERE chat_id = ? AND member_id = ?"
+	query := "SELECT member_id FROM chats_members " +
+		"WHERE chat_id = ? AND member_id = ?"
 
 	row := db.Conn.QueryRow(query, chatId, userId)
 	var member_id int
@@ -397,12 +379,11 @@ type Chat struct {
 }
 
 func (db *DB) GetUserChats(userId int) ([]Chat, error) {
-	query :=
-		"SELECT chats.id, chats.name, chats.last_message_ts " +
-			"FROM chats_members LEFT JOIN chats " +
-			"ON chats_members.chat_id = chats.id " +
-			"WHERE chats_members.member_id = ? " +
-			"ORDER BY chats.last_message_ts DESC"
+	query := "SELECT chats.id, chats.name, chats.last_message_ts " +
+		"FROM chats_members LEFT JOIN chats " +
+		"ON chats_members.chat_id = chats.id " +
+		"WHERE chats_members.member_id = ? " +
+		"ORDER BY chats.last_message_ts DESC"
 	rows, err := db.Conn.Query(query, userId)
 	if err != nil {
 		return nil, err
@@ -449,10 +430,9 @@ type ChatInformation struct {
 }
 
 func (db *DB) GetChat(userId, chatId int, withLastMessages, withMembers bool) (*ChatInformation, error) {
-	query :=
-		"SELECT chat_id " +
-			"FROM chats_members " +
-			"WHERE member_id = ? AND chat_id = ?"
+	query := "SELECT chat_id " +
+		"FROM chats_members " +
+		"WHERE member_id = ? AND chat_id = ?"
 	row := db.Conn.QueryRow(query, userId, chatId)
 
 	var accessToChat int
@@ -462,9 +442,8 @@ func (db *DB) GetChat(userId, chatId int, withLastMessages, withMembers bool) (*
 		return nil, errors.New("Access denied")
 	}
 
-	query =
-		"SELECT id, owner_id, name, create_ts, last_message_ts, messages_count, members_count " +
-			"FROM chats WHERE id = ?"
+	query = "SELECT id, owner_id, name, create_ts, last_message_ts, messages_count, members_count " +
+		"FROM chats WHERE id = ?"
 	row = db.Conn.QueryRow(query, chatId)
 
 	var chat ChatInformation
@@ -496,9 +475,8 @@ func (db *DB) GetChat(userId, chatId int, withLastMessages, withMembers bool) (*
 }
 
 func (db *DB) GetChatMembers(chatId int) ([]ChatMember, error) {
-	query :=
-		"SELECT id, username FROM users " +
-			"WHERE id IN (SELECT member_id FROM chats_members WHERE chat_id = ?)"
+	query := "SELECT id, username FROM users " +
+		"WHERE id IN (SELECT member_id FROM chats_members WHERE chat_id = ?)"
 	rows, err := db.Conn.Query(query, chatId)
 	if err != nil {
 		return nil, err
@@ -517,24 +495,22 @@ func (db *DB) GetChatMembers(chatId int) ([]ChatMember, error) {
 func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool) ([]Message, error) {
 	var query string
 	if withUsernames {
-		query =
-			"SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
-				"FROM messages " +
-				"LEFT JOIN users ON users.id = messages.sender_id " +
-				"WHERE messages.chat_id = ? AND " +
-				// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-				"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
-				"ORDER BY messages.message_id DESC " +
-				"LIMIT ?"
+		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
+			"FROM messages " +
+			"LEFT JOIN users ON users.id = messages.sender_id " +
+			"WHERE messages.chat_id = ? AND " +
+			// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
+			"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+			"ORDER BY messages.message_id DESC " +
+			"LIMIT ?"
 	} else {
-		query =
-			"SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
-				"FROM messages " +
-				"WHERE messages.chat_id = ? AND " +
-				// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-				"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
-				"ORDER BY messages.message_id DESC " +
-				"LIMIT ?"
+		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
+			"FROM messages " +
+			"WHERE messages.chat_id = ? AND " +
+			// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
+			"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+			"ORDER BY messages.message_id DESC " +
+			"LIMIT ?"
 	}
 
 	rows, err := db.Conn.Query(query, chatId, chatId, offset, messagesCount)
@@ -559,4 +535,10 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 	}
 
 	return messages, nil
+}
+
+func (db *DB) GetMessage(chatId, messageId int) (*Message, error) {
+	// query := ""
+
+	return nil, nil
 }
