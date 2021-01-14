@@ -194,10 +194,51 @@ html, body {
     font-size: 28px;
 }
 
-.right-messages-stretch-part {
+.main-messages-stretch-part {
     margin-left: 10px;
     display: flex;
     flex-direction: column;
+}
+
+.sent-time {
+    margin-left: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.sent-time-top-plug {
+    font-size: 24px;
+    margin-bottom: 5px;
+    opacity: 0;
+}
+
+.one-message-sent-time {
+    color: #ffffff;
+    opacity: .3;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.first-message-sent-time {
+    color: #ffffff;
+    opacity: .3;
+    padding-bottom: 5px;
+}
+
+.sent-time-separator {
+    flex: 1;
+    background-color: #ffffff;
+    opacity: .3;
+    width: 2px;
+}
+
+.last-message-sent-time {
+    color: #ffffff;
+    opacity: .3;
+    padding-top: 5px;
 }
 
 .sender-username {
@@ -405,4 +446,29 @@ html, body {
 
 .input.no {
     opacity: 0;
+}
+
+#context-menu {
+    position: absolute;
+    background-color: #5959de;
+    padding: 7px;
+    border-radius: 3px;
+}
+
+.context-menu-button {
+    margin-top: 7px;
+    text-align: cetner;
+    color: #ffffff;
+    opacity: .7;
+    cursor: pointer;
+    user-select: none;
+    transition: .1s;
+}
+
+.context-menu-button:first-of-type {
+    margin-top: 0px;
+}
+
+.context-menu-button:hover {
+    opacity: 1;
 }

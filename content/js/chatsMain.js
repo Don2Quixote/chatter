@@ -12,9 +12,18 @@ window.showElement = function showElement(element, time = 300) {
     });
 }
 
+window.convertTsToTime = function(ts) {
+    let date = new Date(ts * 1000);
+    let hours = date.getHours();
+    let minutes = date.getMinutes();
+    let hoursString = hours > 9 ? hours.toString() : '0' + hours.toString();
+    let minutesString = minutes > 9 ? minutes.toString() : '0' + minutes.toString();
+    return `${hoursString}:${minutesString}`;
+}
+
 function connectToLiveUpdates(accessKey) {
     return new Promise((resolve, reject) => {
-        let ws = new WebSocket('ws://' + location.hostname + '/liveUpdates');
+        let ws = new WebSocket('ws://' + location.host + '/liveUpdates');
         let eventListeners = [];
         ws.onopen = resolve({
             subscribe: function(subscriptions) {
@@ -53,6 +62,22 @@ function connectToLiveUpdates(accessKey) {
 
 window.chatsPageScript = async function chatsPageScript() {
     const ERR_INVALID_ACCESS_KEY = 1;
+
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        console.log(e);
+        console.log(e.composedPath());
+        let contextMenuInPath = e.composedPath().find(element => element.classList ? element.id == 'context-menu' : false);
+        let messageInPath = e.composedPath().find(element => element.classList ? element.classList.contains('message') : false);
+        if (contextMenuInPath) {
+            return;
+        } else if (messageInPath) {
+            console.log(messageInPath);
+            buildMessageContextMenu(e.clientX, e.clientY, messageInPath.dataset.chatId, messageInPath.dataset.messageId);
+        } else {
+            buildGlobalContextMenu(e.clientX, e.clientY);
+        }
+    });
 
     let messageInput = document.getElementById('message-input');
     
@@ -303,8 +328,8 @@ window.chatsPageScript = async function chatsPageScript() {
                 avatarElement.classList = 'message-avatar';
                 avatarElement.innerHTML = messages[messageItr1].senderUsername[0].toUpperCase();
 
-                let rightMessagesStretchPart = document.createElement('div');
-                rightMessagesStretchPart.classList = 'right-messages-stretch-part';
+                let mainMessagesStretchPart = document.createElement('div');
+                mainMessagesStretchPart.classList = 'main-messages-stretch-part';
 
                     let senderUsernameElement = document.createElement('div');
                     senderUsernameElement.classList = 'sender-username';
@@ -312,11 +337,15 @@ window.chatsPageScript = async function chatsPageScript() {
                 
                     let messagesBodyElement = document.createElement('div');
                     messagesBodyElement.classList = 'messages-body';
+
+                    let lastMessageSentTs = messages[messageItr1].ts;
+                    let stretchMessagesCount = 0;
                     for (
                         let messageItr2 = messageItr1;
                         messageItr2 < messages.length && messages[messageItr2].senderId == messages[messageItr1].senderId;
                         messageItr2++
                     ) {
+                        stretchMessagesCount++;
                         if (!cachedUsers.get(messages[messageItr2].senderId)) {
                             cachedUsers.set(messages[messageItr2].senderId, messages[messageItr2].senderUsername);
                         }
@@ -329,12 +358,46 @@ window.chatsPageScript = async function chatsPageScript() {
                         messagesBodyElement.insertAdjacentElement('afterbegin', messageElement);
                         messageItr1 = messageItr2;
                     }
+                    let firstMessageSentTs = messages[messageItr1].ts;
 
-                rightMessagesStretchPart.appendChild(senderUsernameElement);
-                rightMessagesStretchPart.appendChild(messagesBodyElement);
+                mainMessagesStretchPart.appendChild(senderUsernameElement);
+                mainMessagesStretchPart.appendChild(messagesBodyElement);
 
-            messagesStretchElement.appendChild(avatarElement);
-            messagesStretchElement.appendChild(rightMessagesStretchPart);
+                let sentTimeElement = document.createElement('div');
+                sentTimeElement.classList = 'sent-time';
+
+                    sentTimeTopPlugElement = document.createElement('div');
+                    sentTimeTopPlugElement.classList = 'sent-time-top-plug';
+                    sentTimeTopPlugElement.innerText = 'P';
+
+                    sentTimeElement.appendChild(sentTimeTopPlugElement);
+
+                    if (stretchMessagesCount > 1) {
+                        firstMessageSentTimeElement = document.createElement('div');
+                        firstMessageSentTimeElement.classList = 'first-message-sent-time';
+                        firstMessageSentTimeElement.innerText = convertTsToTime(firstMessageSentTs);
+                        
+                        sentTimeSeparatorElement = document.createElement('div');
+                        sentTimeSeparatorElement.classList = 'sent-time-separator';
+
+                        lastMessageSentTimeElement = document.createElement('div');
+                        lastMessageSentTimeElement.classList = 'last-message-sent-time';
+                        lastMessageSentTimeElement.innerText = convertTsToTime(lastMessageSentTs);
+
+                        sentTimeElement.appendChild(firstMessageSentTimeElement);
+                        sentTimeElement.appendChild(sentTimeSeparatorElement);
+                        sentTimeElement.appendChild(lastMessageSentTimeElement);
+                    } else {
+                        let oneMessageSentTimeElement = document.createElement('div');
+                        oneMessageSentTimeElement.classList = 'one-message-sent-time';
+                        oneMessageSentTimeElement.innerText = convertTsToTime(firstMessageSentTs);
+
+                        sentTimeElement.appendChild(oneMessageSentTimeElement);
+                    }
+
+                messagesStretchElement.appendChild(avatarElement);
+                messagesStretchElement.appendChild(mainMessagesStretchPart);
+                messagesStretchElement.appendChild(sentTimeElement);
 
             chatContents.insertAdjacentElement('afterbegin', messagesStretchElement);
         }
@@ -367,60 +430,98 @@ window.chatsPageScript = async function chatsPageScript() {
         let senderUsername = cachedUsers.get(newMessage.senderId);
 
         if (lastMessagesStretch && (+lastMessagesStretch.dataset.senderId == newMessage.senderId)) {
-                let messagesBody = lastMessagesStretch.getElementsByClassName('messages-body')[0];
+            let stretchMessagesCount = lastMessagesStretch.getElementsByClassName('message').length;
+            let wasOnlyOneMessageInStretch = stretchMessagesCount == 1;
 
-                let messageElement = document.createElement('div');
-                messageElement.classList = 'message';
-                messageElement.innerText = newMessage.text;
-                messageElement.dataset.chatId = newMessage.chatId;
-                messageElement.dataset.messageId = newMessage.messageId;
+            let messagesBody = lastMessagesStretch.getElementsByClassName('messages-body')[0];
 
-                messagesBody.appendChild(messageElement);
-        }else {
-                let messagesStretchElement = document.createElement('div');
-                messagesStretchElement.classList = 'messages-stretch';
-                messagesStretchElement.dataset.senderId = newMessage.senderId;
+            let messageElement = document.createElement('div');
+            messageElement.classList = 'message';
+            messageElement.innerText = newMessage.text;
+            messageElement.dataset.chatId = newMessage.chatId;
+            messageElement.dataset.messageId = newMessage.messageId;
 
-                    let avatarElement = document.createElement('div');
-                    avatarElement.classList = 'message-avatar';
-                    avatarElement.innerText = senderUsername ? senderUsername[0].toUpperCase() : '#';
+            messagesBody.appendChild(messageElement);
 
-                    let rightMessagesStretchPart = document.createElement('div');
-                    rightMessagesStretchPart.classList = 'right-messages-stretch-part';
+            if (wasOnlyOneMessageInStretch) {
+                let sentTimeElement = lastMessagesStretch.getElementsByClassName('sent-time')[0];
+                let oneMessageSentTimeElement = sentTimeElement.getElementsByClassName('one-message-sent-time')[0];
+                oneMessageSentTimeElement.classList = 'first-message-sent-time';
 
-                        let senderUsernameElement = document.createElement('div');
-                        senderUsernameElement.classList = 'sender-username';
-                        senderUsernameElement.innerText = senderUsername ?? 'Noname';
+                let sentTimeSeparatorElement = document.createElement('div');
+                sentTimeSeparatorElement.classList = 'sent-time-separator';
 
-                        let messagesBodyElement = document.createElement('div');
-                        messagesBodyElement.classList = 'messages-body';
+                let lastMessageSentTimeElement = document.createElement('div');
+                lastMessageSentTimeElement.classList = 'last-message-sent-time';
+                lastMessageSentTimeElement.innerText = convertTsToTime(newMessage.ts);
 
-                            let messageElement = document.createElement('div');
-                            messageElement.classList = 'message';
-                            messageElement.innerText = newMessage.text;
-                            messageElement.dataset.chatId = newMessage.chatId;
-                            messageElement.dataset.messageId = newMessage.messageId;
+                sentTimeElement.appendChild(sentTimeSeparatorElement);
+                sentTimeElement.appendChild(lastMessageSentTimeElement);
+            } else {
+                let sentTimeElement = lastMessagesStretch.getElementsByClassName('sent-time')[0];
+                lastMessageSentTimeElement = sentTimeElement.getElementsByClassName('last-message-sent-time')[0];
+                lastMessageSentTimeElement.innerText = convertTsToTime(newMessage.ts);
+            }
+        } else {
+            let messagesStretchElement = document.createElement('div');
+            messagesStretchElement.classList = 'messages-stretch';
+            messagesStretchElement.dataset.senderId = newMessage.senderId;
 
-                        messagesBodyElement.appendChild(messageElement);
+                let avatarElement = document.createElement('div');
+                avatarElement.classList = 'message-avatar';
+                avatarElement.innerText = senderUsername ? senderUsername[0].toUpperCase() : '#';
 
-                    rightMessagesStretchPart.appendChild(senderUsernameElement);
-                    rightMessagesStretchPart.appendChild(messagesBodyElement);
+                let mainMessagesStretchPart = document.createElement('div');
+                mainMessagesStretchPart.classList = 'main-messages-stretch-part';
 
-                messagesStretchElement.appendChild(avatarElement);
-                messagesStretchElement.appendChild(rightMessagesStretchPart);
+                    let senderUsernameElement = document.createElement('div');
+                    senderUsernameElement.classList = 'sender-username';
+                    senderUsernameElement.innerText = senderUsername ?? 'Noname';
 
-                chatContents.appendChild(messagesStretchElement);
+                    let messagesBodyElement = document.createElement('div');
+                    messagesBodyElement.classList = 'messages-body';
 
-                if (!senderUsername) {
-                    try {
-                        let sender = await getUser(newMessage.senderId);
-                        cachedUsers.set(sender.id, sender.username);
-                        avatarElement.innerText = sender.username[0].toUpperCase();
-                        senderUsernameElement.innerText = sender.username;
-                    } catch (e) {
-                        console.log(e);
-                    }
+                        let messageElement = document.createElement('div');
+                        messageElement.classList = 'message';
+                        messageElement.innerText = newMessage.text;
+                        messageElement.dataset.chatId = newMessage.chatId;
+                        messageElement.dataset.messageId = newMessage.messageId;
+
+                    messagesBodyElement.appendChild(messageElement);
+
+                mainMessagesStretchPart.appendChild(senderUsernameElement);
+                mainMessagesStretchPart.appendChild(messagesBodyElement);
+
+            let sentTimeElement = document.createElement('div');
+            sentTimeElement.classList = 'sent-time';
+
+                sentTimeTopPlugElement = document.createElement('div');
+                sentTimeTopPlugElement.classList = 'sent-time-top-plug';
+                sentTimeTopPlugElement.innerText = 'P';
+
+                let oneMessageSentTimeElement = document.createElement('div');
+                oneMessageSentTimeElement.classList = 'one-message-sent-time';
+                oneMessageSentTimeElement.innerText = convertTsToTime(newMessage.ts);
+
+            sentTimeElement.appendChild(sentTimeTopPlugElement);
+            sentTimeElement.appendChild(oneMessageSentTimeElement);
+
+            messagesStretchElement.appendChild(avatarElement);
+            messagesStretchElement.appendChild(mainMessagesStretchPart);
+            messagesStretchElement.appendChild(sentTimeElement);
+
+            chatContents.appendChild(messagesStretchElement);
+
+            if (!senderUsername) {
+                try {
+                    let sender = await getUser(newMessage.senderId);
+                    cachedUsers.set(sender.id, sender.username);
+                    avatarElement.innerText = sender.username[0].toUpperCase();
+                    senderUsernameElement.innerText = sender.username;
+                } catch (e) {
+                    console.log(e);
                 }
+            }
         }
 
         if (newMessage.senderId == activeUserId || wasInTheBottom) {
@@ -455,15 +556,10 @@ window.chatsPageScript = async function chatsPageScript() {
                 throw new Error('No messages in response');
             }
 
-            let chatContents = document.getElementById('chat-contents');
-            let currentPositionMessage = document.getElementsByClassName('message')[0];
-
             for (let message of data.messages) {
                 appendOldMessage(message);
                 await delay(50);
             }
-
-            // setTimeout(function() {currentPositionMessage.scrollIntoView()}, 200);
         } catch (e) {
             console.log(e);
         }
@@ -485,6 +581,8 @@ window.chatsPageScript = async function chatsPageScript() {
         if (firstMessagesStretch) {
             if (+firstMessagesStretch.dataset.senderId == oldMessage.senderId) {
                 let messagesBody = firstMessagesStretch.getElementsByClassName('messages-body')[0];
+                let messagesCount = messagesBody.getElementsByClassName('message').length;
+                let wasOnlyOneMessageInStretch = messagesCount == 1;
 
                 let messageElement = document.createElement('div');
                 messageElement.classList = 'message';
@@ -493,6 +591,26 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.dataset.messageId = oldMessage.id;
 
                 messagesBody.insertAdjacentElement('afterbegin', messageElement);
+
+                if (wasOnlyOneMessageInStretch) {
+                    let sentTimeElement = firstMessagesStretch.getElementsByClassName('sent-time')[0];
+                    let oneMessageSentTimeElement = sentTimeElement.getElementsByClassName('one-message-sent-time')[0];
+                    oneMessageSentTimeElement.classList = 'last-message-sent-time';
+
+                    let sentTimeSeparatorElement = document.createElement('div');
+                    sentTimeSeparatorElement.classList = 'sent-time-separator';
+
+                    let firstMessageSentTimeElement = document.createElement('div');
+                    firstMessageSentTimeElement.classList = 'first-message-sent-time';
+                    firstMessageSentTimeElement.innerText = convertTsToTime(oldMessage.ts);
+
+                    sentTimeElement.insertBefore(firstMessageSentTimeElement, oneMessageSentTimeElement);
+                    sentTimeElement.insertBefore(sentTimeSeparatorElement, oneMessageSentTimeElement);
+                } else {
+                    let sentTimeElement = firstMessagesStretch.getElementsByClassName('sent-time')[0];
+                    firstMessageSentTimeElement = sentTimeElement.getElementsByClassName('first-message-sent-time');
+                    firstMessageSentTimeElement.innerText = convertTsToTime(oldMessage.ts);
+                }
             } else {
                 let messagesStretchElement = document.createElement('div');
                 messagesStretchElement.classList = 'messages-stretch';
@@ -502,8 +620,8 @@ window.chatsPageScript = async function chatsPageScript() {
                     avatarElement.classList = 'message-avatar';
                     avatarElement.innerText = senderUsername ? senderUsername[0].toUpperCase() : '#';
 
-                    let rightMessagesStretchPart = document.createElement('div');
-                    rightMessagesStretchPart.classList = 'right-messages-stretch-part';
+                    let mainMessagesStretchPart = document.createElement('div');
+                    mainMessagesStretchPart.classList = 'main-messages-stretch-part';
 
                         let senderUsernameElement = document.createElement('div');
                         senderUsernameElement.classList = 'sender-username';
@@ -516,15 +634,33 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.classList = 'message';
                             messageElement.innerText = oldMessage.text;
                             messageElement.dataset.chatId = oldMessage.chatId;
-                            messageElement.dataset.messageId = oldMessage.messageId;
+                            messageElement.dataset.messageId = oldMessage.id;
 
                         messagesBodyElement.appendChild(messageElement);
 
-                    rightMessagesStretchPart.appendChild(senderUsernameElement);
-                    rightMessagesStretchPart.appendChild(messagesBodyElement);
+                    mainMessagesStretchPart.appendChild(senderUsernameElement);
+                    mainMessagesStretchPart.appendChild(messagesBodyElement);
+
+                    let sentTimeElement = document.createElement('div');
+                    sentTimeElement.classList = 'sent-time';
+    
+                        sentTimeTopPlugElement = document.createElement('div');
+                        sentTimeTopPlugElement.classList = 'sent-time-top-plug';
+                        sentTimeTopPlugElement.innerText = 'P';
+    
+                        sentTimeElement.appendChild(sentTimeTopPlugElement);
+    
+                        oneMessageSentTimeElement = document.createElement('div');
+                        oneMessageSentTimeElement.classList = 'one-message-sent-time';
+                        oneMessageSentTimeElement.innerText = convertTsToTime(oldMessage.ts);
+
+                        sentTimeElement.appendChild(oneMessageSentTimeElement);
+                        // sentTimeElement.appendChild(sentTimeSeparatorElement);
+                        // sentTimeElement.appendChild(lastMessageSentTimeElement);
 
                 messagesStretchElement.appendChild(avatarElement);
-                messagesStretchElement.appendChild(rightMessagesStretchPart);
+                messagesStretchElement.appendChild(mainMessagesStretchPart);
+                messagesStretchElement.appendChild(sentTimeElement);
 
                 chatContents.insertAdjacentElement('afterbegin', messagesStretchElement);
 
@@ -569,7 +705,7 @@ window.chatsPageScript = async function chatsPageScript() {
         for (let chatButton of document.getElementsByClassName('chat-button')) {
             chatButton.classList.remove('active');
         }
-        this.classList.add('active');
+        document.getElementById('add-chat-button').classList.add('active');
 
         await showElement(subPanel, 300);
 
@@ -874,6 +1010,80 @@ window.chatsPageScript = async function chatsPageScript() {
         chatNameInput.focus();
     }
 
+    function buildGlobalContextMenu(x, y) {
+        let oldContextMenuElement = document.getElementById('context-menu');
+        if (oldContextMenuElement) {
+            document.body.removeChild(oldContextMenuElement);
+        }
+
+        let contextMenuElement = document.createElement('div');
+        contextMenuElement.id = 'context-menu';
+        contextMenuElement.style.left = `${x}px`;
+        contextMenuElement.style.top = `${y}px`;
+
+            let addChatButton = document.createElement('div');
+            addChatButton.classList = 'context-menu-button';
+            addChatButton.innerText = 'Add chat';
+            addChatButton.addEventListener('click', function() {
+                buildAddChatMenu();
+                removeContextMenuElement(true);
+            });
+
+            let exitAccountButton = document.createElement('div');
+            exitAccountButton.classList = 'context-menu-button';
+            exitAccountButton.innerText = 'Exit account';
+            exitAccountButton.addEventListener('click', exitAccount);
+
+        contextMenuElement.appendChild(addChatButton);
+        contextMenuElement.appendChild(exitAccountButton);
+
+        document.body.appendChild(contextMenuElement);
+
+        function removeContextMenuElement(e) {
+            if (e === true || !e.composedPath().includes(contextMenuElement)) {
+                try {
+                    document.body.removeChild(contextMenuElement);
+                } catch {}
+                document.body.removeEventListener('click', removeContextMenuElement);
+            }
+        }
+        document.body.addEventListener('click', removeContextMenuElement);
+    }
+
+    function buildMessageContextMenu(x, y, chatId, messageId) {
+        let oldContextMenuElement = document.getElementById('context-menu');
+        if (oldContextMenuElement) {
+            document.body.removeChild(oldContextMenuElement);
+        }
+        
+        let contextMenuElement = document.createElement('div');
+        contextMenuElement.id = 'context-menu';
+        contextMenuElement.style.left = `${x}px`;
+        contextMenuElement.style.top = `${y}px`;
+
+            let deleteMessageButton = document.createElement('div');
+            deleteMessageButton.classList = 'context-menu-button';
+            deleteMessageButton.innerText = 'Delete message';
+            deleteMessageButton.addEventListener('click', function() {
+                deleteMessage(chatId, messageId);
+                removeContextMenuElement(true);
+            });
+
+        contextMenuElement.appendChild(deleteMessageButton);
+
+        document.body.appendChild(contextMenuElement);
+
+        function removeContextMenuElement(e) {
+            if (e === true || !e.composedPath().includes(contextMenuElement)) {
+                try {
+                    document.body.removeChild(contextMenuElement);
+                } catch {}
+                document.body.removeEventListener('click', removeContextMenuElement);
+            }
+        }
+        document.body.addEventListener('click', removeContextMenuElement);
+    }
+
     function sendMessage(chatId, text) {
         return fetch('/sendMessage', {
             method: 'POST',
@@ -948,6 +1158,19 @@ window.chatsPageScript = async function chatsPageScript() {
             throw parsed;
         }
         return parsed.chat;
+    }
+
+    async function deleteMessage(chatId, messageId) {
+        console.log(chatId, messageId);
+    }
+
+    function deleteCookie(cookieName) {
+        document.cookie = `${cookieName}=; expires = Thu, 01 Jan 1970 00:00:00 GMT`
+    }
+
+    async function exitAccount() {
+        deleteCookie('authorized');
+        location.replace('/');
     }
 }
 

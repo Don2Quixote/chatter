@@ -323,29 +323,39 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 
 	if eventBus, exists := eventBus.Chats[*params.ChatId]; exists {
 		eventBus.Mutex.Lock()
-		for _, subscriber := range eventBus.Sockets {
-			var message struct {
-				Event     string `json:"event"`
-				EventData struct {
-					ChatId    int    `json:"chatId"`
-					MessageId int    `json:"messageId"`
-					SenderId  int    `json:"senderId"`
-					Text      string `json:"text"`
-				} `json:"eventData"`
-			}
-			message.Event = "newMessage"
-			message.EventData.ChatId = *params.ChatId
-			message.EventData.MessageId = messageId
-			message.EventData.SenderId = userId
-			message.EventData.Text = *params.Text
-			jsonString, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-				return
-			}
 
-			subscriber.WriteMessage(ws.TextMessage, jsonString)
+		var message struct {
+			Event     string `json:"event"`
+			EventData struct {
+				ChatId    int    `json:"chatId"`
+				MessageId int    `json:"messageId"`
+				SenderId  int    `json:"senderId"`
+				Text      string `json:"text"`
+				Ts        int    `json:"ts"`
+			} `json:"eventData"`
 		}
+		message.Event = "newMessage"
+		message.EventData.ChatId = *params.ChatId
+		message.EventData.MessageId = messageId
+		message.EventData.SenderId = userId
+		message.EventData.Text = *params.Text
+		message.EventData.Ts = int(time.Now().Unix())
+		jsonMessage, err := json.Marshal(message)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		wg := sync.WaitGroup{}
+		for _, subscriber := range eventBus.Sockets {
+			wg.Add(1)
+			go func(subscriber *ws.Conn) {
+				subscriber.WriteMessage(ws.TextMessage, jsonMessage)
+				wg.Done()
+			}(subscriber)
+		}
+		wg.Wait()
+
 		eventBus.Mutex.Unlock()
 	}
 }
@@ -619,14 +629,13 @@ func handleLiveUpdates(response http.ResponseWriter, request *http.Request) {
 func openSqlConnection() (db database.DB, err error) {
 	sqlSourceString := fmt.Sprintf("%s:%s@tcp(%s)/%s",
 		os.Getenv("dbUser"),
-		os.Getenv("dbPassowrd"),
+		os.Getenv("dbPassword"),
 		os.Getenv("dbHost"),
 		os.Getenv("dbName"))
-	conn, err := sql.Open("mysql", sqlSourceString)
+	db.Conn, err = sql.Open("mysql", sqlSourceString)
 	if err != nil {
 		return
 	}
-	db.Conn = conn
 	return
 }
 
@@ -642,7 +651,7 @@ func logEventBus() {
 func main() {
 	eventBus.Chats = make(map[int]*subEventBus)
 
-	// go logEventBus()
+	go logEventBus()
 
 	db, err := openSqlConnection()
 	if err != nil {
@@ -682,5 +691,8 @@ func main() {
 	http.HandleFunc("/enterChat", handleEnterChat)
 	http.HandleFunc("/createChat", handleCreateChat)
 
-	http.ListenAndServe(":80", nil)
+	err = http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 }
