@@ -109,8 +109,8 @@ html, body {
 }
 
 #chat-container.no {
-    flex: 0;
-    width: 0px;
+    /* flex: 0; */
+    /* width: 0px; */
     opacity: 0;
 }
 
@@ -471,4 +471,11 @@ html, body {
 
 .context-menu-button:hover {
     opacity: 1;
+}
+
+.context-menu-separator {
+    height: 2px;
+    background-color: #ffffff;
+    opacity: .1;
+    margin-top: 7px;
 }

@@ -526,6 +526,80 @@ func handleCreateChat(response http.ResponseWriter, request *http.Request) {
 	jsonEncoder.Encode(responseStruct)
 }
 
+func handleLeaveChat(response http.ResponseWriter, request *http.Request) {
+	if request.Method != "POST" {
+		io.WriteString(response, `{"error":"Wrong method"}`)
+		return
+	}
+
+	db, authorized, userId := checkAccessKey(response, request)
+	if !authorized {
+		return
+	}
+	defer db.Close()
+
+	var dataStruct struct {
+		ChatId int `json:"chatId"`
+	}
+	jsonDecoder := json.NewDecoder(request.Body)
+	err := jsonDecoder.Decode(&dataStruct)
+	if err != nil {
+		io.WriteString(response, `{"error":"Can't parse json"}`)
+		return
+	}
+
+	userInChat := db.IsUserInChat(userId, dataStruct.ChatId)
+	if !userInChat {
+		io.WriteString(response, `{"error":"Chat not found"}`)
+		return
+	}
+
+	err = db.RemoveChatMember(userId, dataStruct.ChatId)
+	if err != nil {
+		io.WriteString(response, `{"error":"Server Internal Error"}`)
+		return
+	}
+
+	responseStruct := struct {
+		Success bool `json:"success"`
+	}{true}
+
+	encoder := json.NewEncoder(response)
+	encoder.Encode(responseStruct)
+
+	if eventBus, exists := eventBus.Chats[dataStruct.ChatId]; exists {
+		eventBus.Mutex.Lock()
+
+		var message struct {
+			Event     string `json:"event"`
+			EventData struct {
+				ChatId int `json:"chatId"`
+				UserId int `json:"userId"`
+			} `json:"eventData"`
+		}
+		message.Event = "chatMemberLeft"
+		message.EventData.ChatId = dataStruct.ChatId
+		message.EventData.UserId = userId
+		jsonMessage, err := json.Marshal(message)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		wg := sync.WaitGroup{}
+		for _, subscriber := range eventBus.Sockets {
+			wg.Add(1)
+			go func(subscriber *ws.Conn) {
+				subscriber.WriteMessage(ws.TextMessage, jsonMessage)
+				wg.Done()
+			}(subscriber)
+		}
+		wg.Wait()
+
+		eventBus.Mutex.Unlock()
+	}
+}
+
 func handleDeleteMessages(response http.ResponseWriter, request *http.Request) {
 	if request.Method != "POST" {
 		io.WriteString(response, `{"error":"Wrong method"}`)
@@ -619,7 +693,6 @@ func handleDeleteMessages(response http.ResponseWriter, request *http.Request) {
 			log.Println(err)
 			return
 		}
-		log.Println("message", message)
 
 		wg := sync.WaitGroup{}
 		for _, subscriber := range eventBus.Sockets {
@@ -799,6 +872,7 @@ func main() {
 	http.HandleFunc("/getMessages", handleGetMessages)
 	http.HandleFunc("/enterChat", handleEnterChat)
 	http.HandleFunc("/createChat", handleCreateChat)
+	http.HandleFunc("/leaveChat", handleLeaveChat)
 	http.HandleFunc("/deleteMessages", handleDeleteMessages)
 
 	err = http.ListenAndServe(":8080", nil)

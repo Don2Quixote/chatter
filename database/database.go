@@ -318,6 +318,19 @@ func (db *DB) addChatMember(chatId, userId int, isOwner bool) error {
 	return nil
 }
 
+func (db *DB) RemoveChatMember(userId, chatId int) error {
+	query := "DELETE FROM chats_members WHERE chat_id = ? AND member_id = ? LIMIT 1"
+	_, err := db.Conn.Exec(query, chatId, userId)
+	if err != nil {
+		return err
+	}
+
+	query = "UPDATE chats SET members_count = members_count - 1 WHERE id = ?"
+	_, err = db.Conn.Exec(query, chatId)
+
+	return err
+}
+
 func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 	userInChat := db.IsUserInChat(senderId, chatId)
 	if !userInChat {
@@ -359,13 +372,12 @@ func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 
 func (db *DB) IsUserInChat(userId, chatId int) bool {
 	query := "SELECT member_id FROM chats_members " +
-		"WHERE chat_id = ? AND member_id = ?"
+		"WHERE chat_id = ? AND member_id = ? LIMIT 1"
 
 	row := db.Conn.QueryRow(query, chatId, userId)
 	var member_id int
 	err := row.Scan(&member_id)
 	if err != nil {
-		log.Println(err)
 		return false
 	}
 

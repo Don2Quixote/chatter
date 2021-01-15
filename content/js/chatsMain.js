@@ -65,14 +65,33 @@ window.chatsPageScript = async function chatsPageScript() {
 
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        let contextMenuInPath = e.composedPath().find(element => element.classList ? element.id == 'context-menu' : false);
-        let messageInPath = e.composedPath().find(element => element.classList ? element.classList.contains('message') : false);
+        let composedPath = e.composedPath();
+        let contextMenuInPath = composedPath.find(element => element.id ? element.id == 'context-menu' : false);
+        let messageInPath = composedPath.find(element => element.classList ? element.classList.contains('message') : false);
+        let chatContainerInPath = composedPath.find(element => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
+        let chatButtonInPath = composedPath.find(element => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
         if (contextMenuInPath) {
             return;
         } else if (messageInPath) {
-            buildMessageContextMenu(e.clientX, e.clientY, messageInPath.dataset.chatId, messageInPath.dataset.messageId, messageInPath.dataset.senderId);
+            buildMessageContextMenu(e.clientX, e.clientY, +messageInPath.dataset.chatId, +messageInPath.dataset.messageId, +messageInPath.dataset.senderId);
         } else {
-            buildGlobalContextMenu(e.clientX, e.clientY);
+            let additionalActions = [];
+            if (chatContainerInPath) {
+                additionalActions.push({
+                    label: 'Leave chat',
+                    onselect: function() {
+                        leaveChat(+chatContainerInPath.dataset.chatId)
+                    }
+                });   
+            } else if (chatButtonInPath) {
+                additionalActions.push({
+                    label: 'Leave chat',
+                    onselect: function() {
+                        leaveChat(+chatButtonInPath.dataset.chatId);
+                    }
+                });
+            }
+            buildGlobalContextMenu(e.clientX, e.clientY, additionalActions);
         }
     });
 
@@ -104,13 +123,39 @@ window.chatsPageScript = async function chatsPageScript() {
     liveUpdates.addEventListener('messagesDeleted', function(eventData) {
         console.log(eventData);
         if (eventData.chatId == activeChatId) {
-            console.log('here');
             for (let messageId of eventData.deletedMessageIds) {
                 removeDeletedMessage(eventData.chatId, messageId);
             }
         }
-        
-    })
+    });
+    liveUpdates.addEventListener('chatMemberLeft', async function(eventData) {
+        console.log(eventData);
+        if (eventData.userId == activeUserId) {
+            let chatButtons = document.getElementsByClassName('chat-button');
+            for (let chatButton of chatButtons) {
+                if (+chatButton.dataset.chatId == eventData.chatId) {
+                    chatButton.parentElement.removeChild(chatButton);
+                    break;
+                }
+            }
+            if (eventData.chatId == activeChatId) {
+                let otherChatToBuild = document.getElementsByClassName('chat-button')[0];
+                if (otherChatToBuild.dataset.chatId) {
+                    let chat = await getChat(+otherChatToBuild.dataset.chatId);
+                    buildChat(chat);
+                } else {
+                    let chatContainerElement = document.getElementById('chat-container');
+                    chatContainerElement.dataset.chatId = '';
+                    hideElement(chatContainerElement);
+                    let chatContents = document.getElementById('chat-contents');
+                    chatContents.innerHTML = '';
+                }
+            }
+        } else if (eventData.chatId == activeChatId) {
+            let membersCountElement = document.getElementById('members-count');
+            membersCountElement.innerText -= 1;
+        }
+    });
 
     messageInput.addEventListener('focus', function() {
         if (messageInput.classList.contains('not-touched')) {
@@ -238,6 +283,9 @@ window.chatsPageScript = async function chatsPageScript() {
             return;
         }
         buildChat(chat);
+    } else {
+        let chatContainerElement = document.getElementById('chat-container');
+        hideElement(chatContainerElement);
     }
 
     let addChatButton = document.getElementById('add-chat-button');
@@ -283,6 +331,7 @@ window.chatsPageScript = async function chatsPageScript() {
         if (+chatContainer.dataset.chatId == chat.id) {
             return;
         }
+        showElement(chatContainer);
 
         let oldChatContents = document.getElementById('chat-contents');
         let chatContents = document.createElement('div');
@@ -1057,7 +1106,7 @@ window.chatsPageScript = async function chatsPageScript() {
         chatNameInput.focus();
     }
 
-    function buildGlobalContextMenu(x, y) {
+    function buildGlobalContextMenu(x, y, additionalActions) {
         let oldContextMenuElement = document.getElementById('context-menu');
         if (oldContextMenuElement) {
             document.body.removeChild(oldContextMenuElement);
@@ -1067,6 +1116,24 @@ window.chatsPageScript = async function chatsPageScript() {
         contextMenuElement.id = 'context-menu';
         contextMenuElement.style.left = `${x}px`;
         contextMenuElement.style.top = `${y}px`;
+
+            for (let action of additionalActions) {
+                let actionButton = document.createElement('div');
+                actionButton.classList = 'context-menu-button';
+                actionButton.innerText = action.label;
+                actionButton.addEventListener('click', function() {
+                    action.onselect();
+                    removeContextMenuElement(true);
+                });
+
+                contextMenuElement.appendChild(actionButton);
+            }
+            if (additionalActions.length) {
+                let contextMenuSeparatorElement = document.createElement('div');
+                contextMenuSeparatorElement.classList = 'context-menu-separator';
+                
+                contextMenuElement.appendChild(contextMenuSeparatorElement);
+            }
 
             let addChatButton = document.createElement('div');
             addChatButton.classList = 'context-menu-button';
@@ -1207,6 +1274,23 @@ window.chatsPageScript = async function chatsPageScript() {
             throw parsed;
         }
         return parsed.chat;
+    }
+
+    async function leaveChat(chatId) {
+        let response = await fetch(`/leaveChat`, {
+            method: 'POST',
+            headers: {
+                'Authorization': accessKey
+            },
+            body: JSON.stringify({
+                chatId
+            })
+        });
+        let parsed = await response.json();
+        if (parsed.error) {
+            throw parsed;
+        }
+        return parsed.success;
     }
 
     async function deleteMessages(chatId, messageIds) {
