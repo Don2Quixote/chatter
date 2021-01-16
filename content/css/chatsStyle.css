@@ -272,6 +272,10 @@ html, body {
     border-radius: 0 10px 10px 10px;
 }
 
+.selectedMessage {
+    opacity: .7;
+}
+
 #message-input {
     min-height: 21px;
     max-height: 240px;

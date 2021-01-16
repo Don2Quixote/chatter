@@ -70,28 +70,79 @@ window.chatsPageScript = async function chatsPageScript() {
         let messageInPath = composedPath.find(element => element.classList ? element.classList.contains('message') : false);
         let chatContainerInPath = composedPath.find(element => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
         let chatButtonInPath = composedPath.find(element => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
+        let selectedMessages = document.getElementsByClassName('selectedMessage');
         if (contextMenuInPath) {
             return;
         } else if (messageInPath) {
-            buildMessageContextMenu(e.clientX, e.clientY, +messageInPath.dataset.chatId, +messageInPath.dataset.messageId, +messageInPath.dataset.senderId);
-        } else {
-            let additionalActions = [];
-            if (chatContainerInPath) {
-                additionalActions.push({
-                    label: 'Leave chat',
-                    onselect: function() {
-                        leaveChat(+chatContainerInPath.dataset.chatId)
+            console.log(selectedMessages.length);
+            if (selectedMessages.length == 0) {
+                if (+messageInPath.dataset.senderId == activeUserId) {
+                    buildContextMenu(e.clientX, e.clientY, [[
+                        {
+                            label: 'Delete message',
+                            onselect: function() {
+                                deleteMessages(activeChatId, +messageInPath.dataset.messageId);
+                            }
+                        }
+                    ]], false);
+                }
+            } else {
+                messageIdsToDelete = [];
+                for (let message of selectedMessages) {
+                    if (message.dataset.senderId == activeUserId || activeChatOwnerId == activeUserId) {
+                        messageIdsToDelete.push(+message.dataset.messageId);
                     }
-                });   
-            } else if (chatButtonInPath) {
-                additionalActions.push({
-                    label: 'Leave chat',
-                    onselect: function() {
-                        leaveChat(+chatButtonInPath.dataset.chatId);
-                    }
-                });
+                }
+                console.log(messageIdsToDelete);
+                if (messageIdsToDelete.length > 0) {
+                    buildContextMenu(e.clientX, e.clientY, [[
+                        {
+                            label: 'Delete selected',
+                            onselect: function() {
+                                deleteMessages(activeChatId, messageIdsToDelete);
+                            }
+                        }
+                    ]], false);
+                }
             }
-            buildGlobalContextMenu(e.clientX, e.clientY, additionalActions);
+        } else if (chatContainerInPath) {
+            let additionalActionsGroups = [];
+            
+            if (selectedMessages.length > 0) {
+                messageIdsToDelete = [];
+                for (let message of selectedMessages) {
+                    if (message.dataset.senderId == activeUserId || activeChatOwnerId == activeUserId) {
+                        messageIdsToDelete.push(+message.dataset.messageId);
+                    }
+                }
+
+                if (messageIdsToDelete.length > 0) {
+                    additionalActionsGroups.push([{
+                        label: 'Delete selected',
+                        onselect: function() {
+                            deleteMessages(activeChatId, messageIdsToDelete);
+                        }
+                    }]);
+                }
+            }
+
+            additionalActionsGroups.push([{
+                label: 'Leave chat',
+                onselect: function() {
+                    leaveChat(+chatContainerInPath.dataset.chatId);
+                }
+            }]);
+
+            buildContextMenu(e.clientX, e.clientY, additionalActionsGroups);
+        } else if (chatButtonInPath) {
+            buildContextMenu(e.clientX, e.clientY, [[{
+                label: 'Leave chat',
+                onselect: function() {
+                    leavechat(+chatButtonInPath.dataset.chatId);
+                }
+            }]]);
+        } else {
+            buildContextMenu(e.clientX, e.clientY); 
         }
     });
 
@@ -413,6 +464,9 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.chatId = messages[messageItr2].chatId;
                         messageElement.dataset.messageId = messages[messageItr2].id;
                         messageElement.dataset.senderId = messages[messageItr2].senderId;
+                        messageElement.addEventListener('click', function() {
+                            this.classList.toggle('selectedMessage');
+                        });
                         
                         messagesBodyElement.insertAdjacentElement('afterbegin', messageElement);
                         messageItr1 = messageItr2;
@@ -500,6 +554,9 @@ window.chatsPageScript = async function chatsPageScript() {
             messageElement.dataset.chatId = newMessage.chatId;
             messageElement.dataset.messageId = newMessage.messageId;
             messageElement.dataset.senderId = newMessage.senderId;
+            messageElement.addEventListener('click', function() {
+                this.classList.toggle('selectedMessage');
+            });
 
             messagesBody.appendChild(messageElement);
 
@@ -547,6 +604,9 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.chatId = newMessage.chatId;
                         messageElement.dataset.messageId = newMessage.messageId;
                         messageElement.dataset.senderId = newMessage.senderId;
+                        messageElement.addEventListener('click', function() {
+                            this.classList.toggle('selectedMessage');
+                        });
 
                     messagesBodyElement.appendChild(messageElement);
 
@@ -684,6 +744,9 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.dataset.chatId = oldMessage.chatId;
                 messageElement.dataset.messageId = oldMessage.id;
                 messageElement.dataset.senderId = oldMessage.senderId;
+                messageElement.addEventListener('click', function() {
+                    this.classList.toggle('selectedMessage');
+                });
 
                 messagesBody.insertAdjacentElement('afterbegin', messageElement);
 
@@ -731,6 +794,9 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.dataset.chatId = oldMessage.chatId;
                             messageElement.dataset.messageId = oldMessage.id;
                             messageElement.dataset.senderId = oldMessage.senderId;
+                            messageElement.addEventListener('click', function() {
+                                this.classList.toggle('selectedMessage');
+                            });
 
                         messagesBodyElement.appendChild(messageElement);
 
@@ -1106,6 +1172,69 @@ window.chatsPageScript = async function chatsPageScript() {
         chatNameInput.focus();
     }
 
+    function buildContextMenu(x, y, additionalActionsGroups = [], defaultActions = true) {
+        let oldContextMenuElement = document.getElementById('context-menu');
+        if (oldContextMenuElement) {
+            document.body.removeChild(oldContextMenuElement);
+        }
+
+        let contextMenuElement = document.createElement('div');
+        contextMenuElement.id = 'context-menu';
+        contextMenuElement.style.left = `${x}px`;
+        contextMenuElement.style.top = `${y}px`;
+
+        for (let ag in additionalActionsGroups) {
+            for (let action of additionalActionsGroups[ag]) {
+                let actionButton = document.createElement('div');
+                actionButton.classList = 'context-menu-button';
+                actionButton.innerText = action.label;
+                actionButton.addEventListener('click', function() {
+                    action.onselect();
+                    removeContextMenuElement(true);
+                });
+
+                contextMenuElement.appendChild(actionButton);
+            }
+            let contextMenuSeparatorElement = document.createElement('div');
+            contextMenuSeparatorElement.classList = 'context-menu-separator';
+                
+            if (ag < additionalActionsGroups.length - 1) {
+                contextMenuElement.appendChild(contextMenuSeparatorElement);
+            } else if (ag == additionalActionsGroups.length - 1 && defaultActions) {
+                contextMenuElement.appendChild(contextMenuSeparatorElement);
+            }
+        }
+
+        if (defaultActions) {
+            let addChatButton = document.createElement('div');
+            addChatButton.classList = 'context-menu-button';
+            addChatButton.innerText = 'Add chat';
+            addChatButton.addEventListener('click', function() {
+                buildAddChatMenu();
+                removeContextMenuElement(true);
+            });
+
+            let exitAccountButton = document.createElement('div');
+            exitAccountButton.classList = 'context-menu-button';
+            exitAccountButton.innerText = 'Exit account';
+            exitAccountButton.addEventListener('click', exitAccount);
+
+            contextMenuElement.appendChild(addChatButton);
+            contextMenuElement.appendChild(exitAccountButton);
+        }
+
+        document.body.appendChild(contextMenuElement);
+
+        function removeContextMenuElement(e) {
+            if (e === true || !e.composedPath().includes(contextMenuElement)) {
+                try {
+                    document.body.removeChild(contextMenuElement);
+                } catch {}
+                document.body.removeEventListener('click', removeContextMenuElement);
+            }
+        }
+        document.body.addEventListener('click', removeContextMenuElement);
+    }
     function buildGlobalContextMenu(x, y, additionalActions) {
         let oldContextMenuElement = document.getElementById('context-menu');
         if (oldContextMenuElement) {

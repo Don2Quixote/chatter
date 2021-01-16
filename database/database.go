@@ -506,26 +506,40 @@ func (db *DB) GetChatMembers(chatId int) ([]ChatMember, error) {
 
 func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool) ([]Message, error) {
 	var query string
+	// if withUsernames {
+	// 	query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
+	// 		"FROM messages " +
+	// 		"LEFT JOIN users ON users.id = messages.sender_id " +
+	// 		"WHERE messages.chat_id = ? AND " +
+	// 		// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
+	// 		"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+	// 		"ORDER BY messages.message_id DESC " +
+	// 		"LIMIT ?"
+	// } else {
+	// 	query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
+	// 		"FROM messages " +
+	// 		"WHERE messages.chat_id = ? AND " +
+	// 		// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
+	// 		"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+	// 		"ORDER BY messages.message_id DESC " +
+	// 		"LIMIT ?"
+	// }
 	if withUsernames {
 		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
 			"FROM messages " +
 			"LEFT JOIN users ON users.id = messages.sender_id " +
-			"WHERE messages.chat_id = ? AND " +
-			// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-			"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+			"WHERE messages.chat_id = ? " +
 			"ORDER BY messages.message_id DESC " +
-			"LIMIT ?"
+			"LIMIT ? OFFSET ?"
 	} else {
 		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
 			"FROM messages " +
-			"WHERE messages.chat_id = ? AND " +
-			// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-			"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
+			"WHERE messages.chat_id = ? " +
 			"ORDER BY messages.message_id DESC " +
-			"LIMIT ?"
+			"LIMIT ? OFFSET ?"
 	}
 
-	rows, err := db.Conn.Query(query, chatId, chatId, offset, messagesCount)
+	rows, err := db.Conn.Query(query, chatId, messagesCount, offset)
 	if err != nil {
 		return nil, err
 	}
