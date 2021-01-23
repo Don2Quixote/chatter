@@ -487,7 +487,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.senderId = messages[messageItr2].senderId;
                         messageElement.dataset.ts = messages[messageItr2].ts;
                         messageElement.addEventListener('click', function(e) {
-                            if (!e.composedPath().find(element => element.tagName == 'A')) {
+                            if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
                                 this.classList.toggle('selectedMessage');
                             }
                         });
@@ -584,7 +584,7 @@ window.chatsPageScript = async function chatsPageScript() {
             messageElement.dataset.senderId = newMessage.senderId;
             messageElement.dataset.ts = newMessage.ts;
             messageElement.addEventListener('click', function(e) {
-                if (!e.composedPath().find(element => element.tagName == 'A')) {
+                if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
                     this.classList.toggle('selectedMessage');
                 }
             });
@@ -637,7 +637,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.senderId = newMessage.senderId;
                         messageElement.dataset.ts = newMessage.ts;
                         messageElement.addEventListener('click', function(e) {
-                            if (!e.composedPath().find(element => element.tagName == 'A')) {
+                            if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
                                 this.classList.toggle('selectedMessage');
                             }
                         });
@@ -783,7 +783,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.dataset.senderId = oldMessage.senderId;
                 messageElement.dataset.ts = oldMessage.ts;
                 messageElement.addEventListener('click', function(e) {
-                    if (!e.composedPath().find(element => element.tagName == 'A')) {
+                    if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
                         this.classList.toggle('selectedMessage');
                     }
                 });
@@ -836,7 +836,7 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.dataset.senderId = oldMessage.senderId;
                             messageElement.dataset.ts = oldMessage.ts;
                             messageElement.addEventListener('click', function(e) {
-                                if (!e.composedPath().find(element => element.tagName == 'A')) {
+                                if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
                                     this.classList.toggle('selectedMessage');
                                 }
                             });
