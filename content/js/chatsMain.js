@@ -1,3 +1,11 @@
+window.urlify = function urlify(text) {
+    let htmlWithUrls = text.replace(/(https?:\/\/[^\s]+)/g, function(url) {
+        return '<a target="_blank" href="' + url + '">' + url + '</a>';
+    });
+    let htmlWithNewLines = htmlWithUrls.replace(/[\n]/g, '<br>');
+    return htmlWithNewLines;
+}
+
 window.hideElement = function hideElement(element, time = 300) {
     element.classList.add('no');
     return new Promise((resolve) => {
@@ -12,7 +20,7 @@ window.showElement = function showElement(element, time = 300) {
     });
 }
 
-window.convertTsToTime = function(ts) {
+window.convertTsToTime = function convertTsToTime(ts) {
     let date = new Date(ts * 1000);
     let hours = date.getHours();
     let minutes = date.getMinutes();
@@ -21,7 +29,7 @@ window.convertTsToTime = function(ts) {
     return `${hoursString}:${minutesString}`;
 }
 
-function connectToLiveUpdates(accessKey) {
+window.connectToLiveUpdates = function connectToLiveUpdates(accessKey) {
     return new Promise((resolve, reject) => {
         let ws = new WebSocket('ws://' + location.host + '/liveUpdates');
         let eventListeners = [];
@@ -65,23 +73,23 @@ window.chatsPageScript = async function chatsPageScript() {
 
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        let composedPath = e.composedPath();
-        let contextMenuInPath = composedPath.find(element => element.id ? element.id == 'context-menu' : false);
-        let messageInPath = composedPath.find(element => element.classList ? element.classList.contains('message') : false);
-        let chatContainerInPath = composedPath.find(element => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
-        let chatButtonInPath = composedPath.find(element => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
-        let selectedMessages = document.getElementsByClassName('selectedMessage');
+        let clickPath = e.composedPath();
+        let contextMenuInPath = clickPath.find(element => element.id ? element.id == 'context-menu' : false);
         if (contextMenuInPath) {
             return;
-        } else if (messageInPath) {
-            console.log(selectedMessages.length);
+        }
+        let messageInPath = clickPath.find(element => element.classList ? element.classList.contains('message') : false);
+        let chatContainerInPath = clickPath.find(element => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
+        let chatButtonInPath = clickPath.find(element => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
+        let selectedMessages = document.getElementsByClassName('selectedMessage');
+        if (messageInPath) {
             if (selectedMessages.length == 0) {
-                if (+messageInPath.dataset.senderId == activeUserId) {
+                if (+messageInPath.dataset.senderId == activeUserId || activeChatId == activeUserId) {
                     buildContextMenu(e.clientX, e.clientY, [[
                         {
                             label: 'Delete message',
                             onselect: function() {
-                                deleteMessages(activeChatId, +messageInPath.dataset.messageId);
+                                deleteMessages(activeChatId, [+messageInPath.dataset.messageId]);
                             }
                         }
                     ]], false);
@@ -93,7 +101,6 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageIdsToDelete.push(+message.dataset.messageId);
                     }
                 }
-                console.log(messageIdsToDelete);
                 if (messageIdsToDelete.length > 0) {
                     buildContextMenu(e.clientX, e.clientY, [[
                         {
@@ -147,6 +154,16 @@ window.chatsPageScript = async function chatsPageScript() {
     });
 
     let messageInput = document.getElementById('message-input');
+
+    window.addEventListener('paste', function(e) {
+        for (item of e.clipboardData.items) {
+            if (item.type == 'image/png') {
+                window.file = item.getAsFile();
+                console.log(file.arrayBuffer().then(a => window.A = a));
+                e.preventDefault();
+            }
+        }
+    });
     
     let workingWithSubPanel = false;
     let loadingMessages = false;
@@ -460,12 +477,14 @@ window.chatsPageScript = async function chatsPageScript() {
                         }
                         let messageElement = document.createElement('div');
                         messageElement.classList = 'message';
-                        messageElement.innerText = messages[messageItr2].text;
+                        messageElement.innerHTML = urlify(messages[messageItr2].text);
                         messageElement.dataset.chatId = messages[messageItr2].chatId;
                         messageElement.dataset.messageId = messages[messageItr2].id;
                         messageElement.dataset.senderId = messages[messageItr2].senderId;
-                        messageElement.addEventListener('click', function() {
-                            this.classList.toggle('selectedMessage');
+                        messageElement.addEventListener('click', function(e) {
+                            if (!e.composedPath().find(element => element.tagName == 'A')) {
+                                this.classList.toggle('selectedMessage');
+                            }
                         });
                         
                         messagesBodyElement.insertAdjacentElement('afterbegin', messageElement);
@@ -550,12 +569,14 @@ window.chatsPageScript = async function chatsPageScript() {
 
             let messageElement = document.createElement('div');
             messageElement.classList = 'message';
-            messageElement.innerText = newMessage.text;
+            messageElement.innerHTML = urlify(newMessage.text);
             messageElement.dataset.chatId = newMessage.chatId;
             messageElement.dataset.messageId = newMessage.messageId;
             messageElement.dataset.senderId = newMessage.senderId;
-            messageElement.addEventListener('click', function() {
-                this.classList.toggle('selectedMessage');
+            messageElement.addEventListener('click', function(e) {
+                if (!e.composedPath().find(element => element.tagName == 'A')) {
+                    this.classList.toggle('selectedMessage');
+                }
             });
 
             messagesBody.appendChild(messageElement);
@@ -600,12 +621,14 @@ window.chatsPageScript = async function chatsPageScript() {
 
                         let messageElement = document.createElement('div');
                         messageElement.classList = 'message';
-                        messageElement.innerText = newMessage.text;
+                        messageElement.innerHTML = urlify(newMessage.text);
                         messageElement.dataset.chatId = newMessage.chatId;
                         messageElement.dataset.messageId = newMessage.messageId;
                         messageElement.dataset.senderId = newMessage.senderId;
-                        messageElement.addEventListener('click', function() {
-                            this.classList.toggle('selectedMessage');
+                        messageElement.addEventListener('click', function(e) {
+                            if (!e.composedPath().find(element => element.tagName == 'A')) {
+                                this.classList.toggle('selectedMessage');
+                            }
                         });
 
                     messagesBodyElement.appendChild(messageElement);
@@ -740,12 +763,14 @@ window.chatsPageScript = async function chatsPageScript() {
 
                 let messageElement = document.createElement('div');
                 messageElement.classList = 'message';
-                messageElement.innerText = oldMessage.text;
+                messageElement.innerHTML = urlify(oldMessage.text);
                 messageElement.dataset.chatId = oldMessage.chatId;
                 messageElement.dataset.messageId = oldMessage.id;
                 messageElement.dataset.senderId = oldMessage.senderId;
-                messageElement.addEventListener('click', function() {
-                    this.classList.toggle('selectedMessage');
+                messageElement.addEventListener('click', function(e) {
+                    if (!e.composedPath().find(element => element.tagName == 'A')) {
+                        this.classList.toggle('selectedMessage');
+                    }
                 });
 
                 messagesBody.insertAdjacentElement('afterbegin', messageElement);
@@ -790,12 +815,14 @@ window.chatsPageScript = async function chatsPageScript() {
 
                             let messageElement = document.createElement('div');
                             messageElement.classList = 'message';
-                            messageElement.innerText = oldMessage.text;
+                            messageElement.innerHTML = urlify(oldMessage.text);
                             messageElement.dataset.chatId = oldMessage.chatId;
                             messageElement.dataset.messageId = oldMessage.id;
                             messageElement.dataset.senderId = oldMessage.senderId;
-                            messageElement.addEventListener('click', function() {
-                                this.classList.toggle('selectedMessage');
+                            messageElement.addEventListener('click', function(e) {
+                                if (!e.composedPath().find(element => element.tagName == 'A')) {
+                                    this.classList.toggle('selectedMessage');
+                                }
                             });
 
                         messagesBodyElement.appendChild(messageElement);
@@ -1451,4 +1478,3 @@ window.chatsPageScript = async function chatsPageScript() {
 }
 
 window.onload = chatsPageScript;
-

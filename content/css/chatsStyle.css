@@ -33,16 +33,6 @@ html, body {
 #chats-panel::-webkit-scrollbar {
   width: 0px;
 }
- 
-/* #chats-panel::-webkit-scrollbar-track { */
-/*   box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3); */
-/* } */
-/*   */
-/* #chats-panel::-webkit-scrollbar-thumb { */
-/*     background-color: #5959de; */
-/*     border-radius: 20px; */
-/* } */
-
 
 .chat-button {
     width: 68px;
