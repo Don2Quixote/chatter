@@ -239,6 +239,31 @@ window.chatsPageScript = async function chatsPageScript() {
         }
     });
     let sendingMessage = false;
+    messagesQueue = [];
+    async function putMessageToSendingQueue(chatId, messageText) {
+        if (!sendingMessage) {
+            sendingMessage = true;
+            try {
+                let response = await sendMessage(chatId, messageText);
+                let responseData = await response.json();
+                if (responseData.error) {
+                    throw responseData.error;
+                }
+            } catch (e) {
+                console.log(`Error sending message ${messageText}, ${e}`);
+            }
+            sendingMessage = false;
+            if (messagesQueue.length) {
+                let messageToSend = messagesQueue[0];
+                messagesQueue = messagesQueue.slice(1);
+                putMessageToSendingQueue(messageToSend.chatId, messageToSend.messageText);
+            }
+        } else {
+            messagesQueue.push({
+                chatId, messageText
+            });
+        }
+    }
     messageInput.addEventListener('keypress', async function(e) {
         if (this.innerText.length >= 2048) {
             e.preventDefault();
@@ -247,22 +272,8 @@ window.chatsPageScript = async function chatsPageScript() {
             e.preventDefault();
             let trimmedMessageText = this.innerText.trim();
             if (trimmedMessageText != '') {
-                if (!sendingMessage) {
-                    let savedMessageText = this.innerText;
-                    this.innerText = '';
-                    sendingMessage = true;
-                    try {
-                        let response = await sendMessage(activeChatId, trimmedMessageText);
-                        let responseData = await response.json();
-                        if (responseData.error) {
-                            throw responseData.error;
-                        }
-                    } catch (e) {
-                        console.log('Error sending message.', e);
-                        this.innerText = savedMessageText;
-                    }
-                    sendingMessage = false;
-                }
+                this.innerText = '';
+                putMessageToSendingQueue(activeChatId, trimmedMessageText);
             }
         }
     });
