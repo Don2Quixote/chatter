@@ -246,10 +246,10 @@ window.chatsPageScript = async function chatsPageScript() {
         if (e.code == 'Enter' && !e.shiftKey) {
             e.preventDefault();
             let trimmedMessageText = this.innerText.trim();
-            let savedMessageText = this.innerText;
-            this.innerText = '';
             if (trimmedMessageText != '') {
                 if (!sendingMessage) {
+                    let savedMessageText = this.innerText;
+                    this.innerText = '';
                     sendingMessage = true;
                     try {
                         let response = await sendMessage(activeChatId, trimmedMessageText);
