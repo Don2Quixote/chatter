@@ -468,9 +468,13 @@ window.chatsPageScript = async function chatsPageScript() {
                     let stretchMessagesCount = 0;
                     for (
                         let messageItr2 = messageItr1;
-                        messageItr2 < messages.length && messages[messageItr2].senderId == messages[messageItr1].senderId;
+                        messageItr2 < messages.length &&
+                        messages[messageItr2].senderId == messages[messageItr1].senderId &&
+                        new Date(messages[messageItr2].ts * 1000).getDate() == new Date(messages[messageItr1].ts * 1000).getDate();
                         messageItr2++
                     ) {
+                        console.log(messages[messageItr2].text);
+                        console.log(new Date(messages[messageItr2].ts * 1000).getDate());
                         stretchMessagesCount++;
                         if (!cachedUsers.get(messages[messageItr2].senderId)) {
                             cachedUsers.set(messages[messageItr2].senderId, messages[messageItr2].senderUsername);
@@ -481,6 +485,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.chatId = messages[messageItr2].chatId;
                         messageElement.dataset.messageId = messages[messageItr2].id;
                         messageElement.dataset.senderId = messages[messageItr2].senderId;
+                        messageElement.dataset.ts = messages[messageItr2].ts;
                         messageElement.addEventListener('click', function(e) {
                             if (!e.composedPath().find(element => element.tagName == 'A')) {
                                 this.classList.toggle('selectedMessage');
@@ -561,7 +566,11 @@ window.chatsPageScript = async function chatsPageScript() {
 
         let senderUsername = cachedUsers.get(newMessage.senderId);
 
-        if (lastMessagesStretch && (+lastMessagesStretch.dataset.senderId == newMessage.senderId)) {
+        if (
+            lastMessagesStretch &&
+            (+lastMessagesStretch.dataset.senderId == newMessage.senderId) &&
+            new Date(+lastMessagesStretch.getElementsByClassName('message')[0].dataset.ts * 1000).getDate() == new Date(newMessage.ts * 1000).getDate()
+        ) {
             let stretchMessagesCount = lastMessagesStretch.getElementsByClassName('message').length;
             let wasOnlyOneMessageInStretch = stretchMessagesCount == 1;
 
@@ -573,6 +582,7 @@ window.chatsPageScript = async function chatsPageScript() {
             messageElement.dataset.chatId = newMessage.chatId;
             messageElement.dataset.messageId = newMessage.messageId;
             messageElement.dataset.senderId = newMessage.senderId;
+            messageElement.dataset.ts = newMessage.ts;
             messageElement.addEventListener('click', function(e) {
                 if (!e.composedPath().find(element => element.tagName == 'A')) {
                     this.classList.toggle('selectedMessage');
@@ -625,6 +635,7 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.chatId = newMessage.chatId;
                         messageElement.dataset.messageId = newMessage.messageId;
                         messageElement.dataset.senderId = newMessage.senderId;
+                        messageElement.dataset.ts = newMessage.ts;
                         messageElement.addEventListener('click', function(e) {
                             if (!e.composedPath().find(element => element.tagName == 'A')) {
                                 this.classList.toggle('selectedMessage');
@@ -756,7 +767,10 @@ window.chatsPageScript = async function chatsPageScript() {
         }
 
         if (firstMessagesStretch) {
-            if (+firstMessagesStretch.dataset.senderId == oldMessage.senderId) {
+            if (
+                +firstMessagesStretch.dataset.senderId == oldMessage.senderId &&
+                new Date(+firstMessagesStretch.getElementsByClassName('message')[0].dataset.ts * 1000).getDate() == new Date(oldMessage.ts * 1000).getDate()
+            ) {
                 let messagesBody = firstMessagesStretch.getElementsByClassName('messages-body')[0];
                 let messagesCount = messagesBody.getElementsByClassName('message').length;
                 let wasOnlyOneMessageInStretch = messagesCount == 1;
@@ -767,6 +781,7 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.dataset.chatId = oldMessage.chatId;
                 messageElement.dataset.messageId = oldMessage.id;
                 messageElement.dataset.senderId = oldMessage.senderId;
+                messageElement.dataset.ts = oldMessage.ts;
                 messageElement.addEventListener('click', function(e) {
                     if (!e.composedPath().find(element => element.tagName == 'A')) {
                         this.classList.toggle('selectedMessage');
@@ -819,6 +834,7 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.dataset.chatId = oldMessage.chatId;
                             messageElement.dataset.messageId = oldMessage.id;
                             messageElement.dataset.senderId = oldMessage.senderId;
+                            messageElement.dataset.ts = oldMessage.ts;
                             messageElement.addEventListener('click', function(e) {
                                 if (!e.composedPath().find(element => element.tagName == 'A')) {
                                     this.classList.toggle('selectedMessage');
