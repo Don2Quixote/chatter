@@ -246,6 +246,8 @@ window.chatsPageScript = async function chatsPageScript() {
         if (e.code == 'Enter' && !e.shiftKey) {
             e.preventDefault();
             let trimmedMessageText = this.innerText.trim();
+            let savedMessageText = this.innerText;
+            this.innerText = '';
             if (trimmedMessageText != '') {
                 if (!sendingMessage) {
                     sendingMessage = true;
@@ -257,9 +259,9 @@ window.chatsPageScript = async function chatsPageScript() {
                         }
                     } catch (e) {
                         console.log('Error sending message.', e);
+                        this.innerText = savedMessageText;
                     }
                     sendingMessage = false;
-                    this.innerText = '';
                 }
             }
         }
@@ -473,8 +475,6 @@ window.chatsPageScript = async function chatsPageScript() {
                         new Date(messages[messageItr2].ts * 1000).getDate() == new Date(messages[messageItr1].ts * 1000).getDate();
                         messageItr2++
                     ) {
-                        console.log(messages[messageItr2].text);
-                        console.log(new Date(messages[messageItr2].ts * 1000).getDate());
                         stretchMessagesCount++;
                         if (!cachedUsers.get(messages[messageItr2].senderId)) {
                             cachedUsers.set(messages[messageItr2].senderId, messages[messageItr2].senderUsername);
