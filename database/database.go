@@ -100,6 +100,19 @@ func (db *DB) InitDatabase() error {
 		return err
 	}
 
+	query = "CREATE TABLE IF NOT EXISTS messages_attachments ( " +
+		"chat_id INT, " +
+		"message_id INT, " +
+		"type VARCHAR(64), " +
+		"hash VARCHAR(64), " +
+		"FOREIGN KEY (chat_id) REFERENCES chats (id), " +
+		"FOREIGN KEY (message_id) REFERENCES messages (message_id) " +
+		") ENGINE=MyISAM; "
+	_, err = db.Conn.Exec(query)
+	if err != nil {
+		return err
+	}
+
 	/* If database just created */
 	if usersCount == 0 {
 		query = "INSERT INTO users VALUES " +
@@ -370,6 +383,18 @@ func (db *DB) AddMessage(chatId, senderId int, text string) (int, error) {
 	return int(messageId), err
 }
 
+func (db *DB) AddAttachment(chatId, messageId int, attachmentType, hash string) bool {
+	query := "INSERT INTO messages_attachments " +
+		"(chat_id, message_id, type, hash) " +
+		"VALUES (?, ?, ?, ?)"
+	_, err := db.Conn.Exec(query, chatId, messageId, attachmentType, hash)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (db *DB) IsUserInChat(userId, chatId int) bool {
 	query := "SELECT member_id FROM chats_members " +
 		"WHERE chat_id = ? AND member_id = ? LIMIT 1"
@@ -413,18 +438,26 @@ func (db *DB) GetUserChats(userId int) ([]Chat, error) {
 	return chats, nil
 }
 
-type Message struct {
-	ChatId         int    `json:"chatId"`
-	Id             int    `json:"id"`
-	Ts             int    `json:"ts"`
-	Text           string `json:"text"`
-	SenderId       int    `json:"senderId"`
-	SenderUsername string `json:"senderUsername"`
+type Attachment struct {
+	ContentType string `json:"contentType"`
+	Hash        string `json:"hash"`
 }
+
+type Message struct {
+	ChatId         int           `json:"chatId"`
+	Id             int           `json:"id"`
+	Ts             int           `json:"ts"`
+	Text           string        `json:"text"`
+	SenderId       int           `json:"senderId"`
+	SenderUsername string        `json:"senderUsername"`
+	Attachments    *[]Attachment `json:"attachments,omitempty"`
+}
+
 type ChatMember struct {
 	Id       int    `json:"id"`
 	Username string `json:"username"`
 }
+
 type ChatInformation struct {
 	Id            int    `json:"id"`
 	OwnerId       int    `json:"ownerId"`
@@ -506,34 +539,23 @@ func (db *DB) GetChatMembers(chatId int) ([]ChatMember, error) {
 
 func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool) ([]Message, error) {
 	var query string
-	// if withUsernames {
-	// 	query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
-	// 		"FROM messages " +
-	// 		"LEFT JOIN users ON users.id = messages.sender_id " +
-	// 		"WHERE messages.chat_id = ? AND " +
-	// 		// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-	// 		"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
-	// 		"ORDER BY messages.message_id DESC " +
-	// 		"LIMIT ?"
-	// } else {
-	// 	query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
-	// 		"FROM messages " +
-	// 		"WHERE messages.chat_id = ? AND " +
-	// 		// "(SELECT COUNT(*) FROM messages WHERE chat_id = ?) - message_id >= ? " +
-	// 		"(SELECT messages_count FROM chats WHERE id = ?) - messages.message_id >= ? " +
-	// 		"ORDER BY messages.message_id DESC " +
-	// 		"LIMIT ?"
-	// }
 	if withUsernames {
-		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username " +
+		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, users.username, " +
+			"attachments.type, attachments.hash " +
 			"FROM messages " +
-			"LEFT JOIN users ON users.id = messages.sender_id " +
+			"LEFT JOIN messages_attachments AS attachments " +
+			"ON messages.chat_id = attachments.chat_id AND messages.message_id = attachments.message_id " +
+			"LEFT JOIN users " +
+			"ON users.id = messages.sender_id " +
 			"WHERE messages.chat_id = ? " +
 			"ORDER BY messages.message_id DESC " +
 			"LIMIT ? OFFSET ?"
 	} else {
-		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text " +
+		query = "SELECT messages.chat_id, messages.message_id, messages.sender_id, messages.ts, messages.text, " +
+			"attachments.type, attachments.hash " +
 			"FROM messages " +
+			"LEFT JOIN messages_attachments AS attachments " +
+			"ON messages.chat_id = attachments.chat_id AND messages.message_id = attachments.message_id " +
 			"WHERE messages.chat_id = ? " +
 			"ORDER BY messages.message_id DESC " +
 			"LIMIT ? OFFSET ?"
@@ -549,16 +571,43 @@ func (db *DB) GetMessages(chatId, offset, messagesCount int, withUsernames bool)
 	if withUsernames {
 		for rows.Next() {
 			var m Message
-			rows.Scan(&m.ChatId, &m.Id, &m.SenderId, &m.Ts, &m.Text, &m.SenderUsername)
-			messages = append(messages, m)
+			var a Attachment
+			rows.Scan(&m.ChatId, &m.Id, &m.SenderId, &m.Ts, &m.Text, &m.SenderUsername, &a.ContentType, &a.Hash)
+			found := false
+			for i := range messages {
+				if messages[i].Id == m.Id {
+					found = true
+					*messages[i].Attachments = append(*messages[i].Attachments, a)
+				}
+			}
+			if !found {
+				if a.Hash != "" {
+					m.Attachments = &[]Attachment{Attachment{ContentType: a.ContentType, Hash: a.Hash}}
+				}
+				messages = append(messages, m)
+			}
 		}
 	} else {
 		for rows.Next() {
 			var m Message
-			rows.Scan(&m.ChatId, &m.Id, &m.SenderId, &m.Ts, &m.Text)
-			messages = append(messages, m)
+			var a Attachment
+			rows.Scan(&m.ChatId, &m.Id, &m.SenderId, &m.Ts, &m.Text, &a.ContentType, &a.Hash)
+			found := false
+			for i := range messages {
+				if messages[i].Id == m.Id {
+					found = true
+					*messages[i].Attachments = append(*messages[i].Attachments, a)
+				}
+			}
+			if !found {
+				if a.Hash != "" {
+					m.Attachments = &[]Attachment{Attachment{ContentType: a.ContentType, Hash: a.Hash}}
+				}
+				messages = append(messages, m)
+			}
 		}
 	}
+
 	return messages, nil
 }
 
@@ -578,10 +627,17 @@ func (db *DB) GetMessage(chatId, messageId int) (*Message, error) {
 }
 
 func (db *DB) DeleteMessage(chatId, messageId int) error {
-	query := "DELETE FROM messages " +
+	query := "DELETE FROM messages_attachments " +
+		"WHERE chat_id = ? AND message_id = ?"
+	_, err := db.Conn.Exec(query, chatId, messageId)
+	if err != nil {
+		return nil
+	}
+
+	query = "DELETE FROM messages " +
 		"WHERE chat_id = ? AND message_id = ? " +
 		"LIMIT 1"
-	_, err := db.Conn.Exec(query, chatId, messageId)
+	_, err = db.Conn.Exec(query, chatId, messageId)
 	if err != nil {
 		return err
 	}

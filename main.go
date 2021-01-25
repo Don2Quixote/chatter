@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -295,22 +298,27 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 	defer db.Close()
 
 	var params struct {
-		ChatId *int    `json:"chatId"`
-		Text   *string `json:"text"`
+		ChatId      *int      `json:"chatId"`
+		Text        *string   `json:"text"`
+		Attachments *[]string `json:"attachments"`
 	}
 	decoder := json.NewDecoder(request.Body)
 	err := decoder.Decode(&params)
 	if err != nil {
 		io.WriteString(response, `{"error":"Invalid request body"}`)
+		return
 	}
+	log.Printf("%+v\n", params)
 
 	if params.ChatId == nil || params.Text == nil {
 		io.WriteString(response, `{"error":"Incorrect params"}`)
 		return
 	}
+
 	*params.Text = strings.TrimSpace(*params.Text)
 	if *params.Text == "" || len(*params.Text) > 2048 {
 		io.WriteString(response, `{"error":"Incorrect text param"}`)
+		return
 	}
 
 	messageId, err := db.AddMessage(*params.ChatId, userId, *params.Text)
@@ -321,17 +329,61 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 
 	io.WriteString(response, fmt.Sprintf(`{"messageId":%d}`, messageId))
 
+	type Attachment struct {
+		ContentType string `json:"contentType"`
+		Hash        string `json:"hash"`
+	}
+	var attachments []Attachment
+	// attachments := make([]Attachment, 0)
+	if params.Attachments != nil {
+		attachmentsCount := len(*params.Attachments)
+		if attachmentsCount > 0 {
+			attachments = make([]Attachment, attachmentsCount)
+			for i, base64attachment := range *params.Attachments {
+				binaryAttachment, err := base64.StdEncoding.DecodeString(base64attachment)
+				if err != nil {
+					log.Println("Error parsing base64", err.Error())
+					continue
+				}
+
+				bytesToDetectContentType := 512
+				attachmentBinaryLength := len(binaryAttachment)
+				if attachmentBinaryLength < 512 {
+					bytesToDetectContentType = attachmentBinaryLength
+				}
+				attachmentContentType := http.DetectContentType(binaryAttachment[:bytesToDetectContentType])
+
+				stringToEncode := fmt.Sprintf("chat%dmessage%dIAmLuman%d", params.ChatId, messageId, i)
+				hash := sha256.Sum256([]byte(stringToEncode))
+				hashString := hex.EncodeToString(hash[:])
+
+				filePath := fmt.Sprintf("attachments/%s", hashString)
+				go ioutil.WriteFile(filePath, binaryAttachment, 0755)
+
+				go db.AddAttachment(*params.ChatId, messageId, attachmentContentType, hashString)
+
+				attachment := Attachment{
+					ContentType: attachmentContentType,
+					Hash:        hashString,
+				}
+
+				attachments[i] = attachment
+			}
+		}
+	}
+
 	if eventBus, exists := eventBus.Chats[*params.ChatId]; exists {
 		eventBus.Mutex.Lock()
 
 		var message struct {
 			Event     string `json:"event"`
 			EventData struct {
-				ChatId    int    `json:"chatId"`
-				MessageId int    `json:"messageId"`
-				SenderId  int    `json:"senderId"`
-				Text      string `json:"text"`
-				Ts        int    `json:"ts"`
+				ChatId      int           `json:"chatId"`
+				MessageId   int           `json:"messageId"`
+				SenderId    int           `json:"senderId"`
+				Text        string        `json:"text"`
+				Ts          int           `json:"ts"`
+				Attachments *[]Attachment `json:"attachments,omitempty"`
 			} `json:"eventData"`
 		}
 		message.Event = "newMessage"
@@ -340,6 +392,9 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 		message.EventData.SenderId = userId
 		message.EventData.Text = *params.Text
 		message.EventData.Ts = int(time.Now().Unix())
+		if len(attachments) > 0 {
+			message.EventData.Attachments = &attachments
+		}
 		jsonMessage, err := json.Marshal(message)
 		if err != nil {
 			log.Println(err)
@@ -611,7 +666,6 @@ func handleDeleteMessages(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	defer db.Close()
-	log.Println("user", userId)
 
 	var dataStruct struct {
 		ChatId     int   `json:"chatId"`
@@ -706,6 +760,37 @@ func handleDeleteMessages(response http.ResponseWriter, request *http.Request) {
 
 		eventBus.Mutex.Unlock()
 	}
+}
+
+func handleGetAttachment(response http.ResponseWriter, request *http.Request) {
+	if request.Method != "GET" {
+		io.WriteString(response, `{"error":"Wrong method"}`)
+		return
+	}
+
+	hash := request.URL.Query().Get("hash")
+	if hash == "" {
+		io.WriteString(response, `{"error":"No required parameter - hash"`)
+		return
+	}
+
+	filePath := fmt.Sprintf("attachments/%s", hash)
+
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		io.WriteString(response, `{"error":"Not found"}`)
+		return
+	}
+
+	binary, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		io.WriteString(response, `{"error":"Not found"}`)
+	}
+
+	contentType := http.DetectContentType(binary[:512])
+	response.Header().Set("Content-Type", contentType)
+
+	response.Write(binary)
 }
 
 var upgrader = ws.Upgrader{
@@ -874,6 +959,9 @@ func main() {
 	http.HandleFunc("/createChat", handleCreateChat)
 	http.HandleFunc("/leaveChat", handleLeaveChat)
 	http.HandleFunc("/deleteMessages", handleDeleteMessages)
+
+	/* Attachments */
+	http.HandleFunc("/attachment", handleGetAttachment)
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {

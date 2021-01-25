@@ -71,21 +71,39 @@ window.connectToLiveUpdates = function connectToLiveUpdates(accessKey) {
 window.chatsPageScript = async function chatsPageScript() {
     const ERR_INVALID_ACCESS_KEY = 1;
 
+    const blobs = new Map();
+
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         let clickPath = e.composedPath();
-        let contextMenuInPath = clickPath.find(element => element.id ? element.id == 'context-menu' : false);
+        let contextMenuInPath = clickPath.find((element) => element.id ? element.id == 'context-menu' : false);
         if (contextMenuInPath) {
             return;
         }
-        let messageInPath = clickPath.find(element => element.classList ? element.classList.contains('message') : false);
-        let chatContainerInPath = clickPath.find(element => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
-        let chatButtonInPath = clickPath.find(element => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
+        let messageInPath = clickPath.find((element) => element.classList ? element.classList.contains('message') : false);
+        let chatContainerInPath = clickPath.find((element) => element.id ? (element.id == 'chat-container' && +element.dataset.chatId > 0) : false);
+        let chatButtonInPath = clickPath.find((element) => element.classList ? (element.classList.contains('chat-button') && +element.dataset.chatId > 0) : false);
+        let imageAttachmentInPath = clickPath.find((element) => element.classList ? (element.classList.contains('image-attachment')) : false);
         let selectedMessages = document.getElementsByClassName('selectedMessage');
         if (messageInPath) {
+            let additionalActionsGroups = [];
+            if (imageAttachmentInPath) {
+                additionalActionsGroups.push([{
+                    label: 'Copy image',
+                    onselect: function() {
+                        let blobId = imageAttachmentInPath.dataset.blobId;
+                        let blob = blobs.get(blobId);
+                        navigator.clipboard.write([
+                            new ClipboardItem({
+                                [blob.type]: blob
+                            })
+                        ]);
+                    }
+                }]);
+            }
             if (selectedMessages.length == 0) {
                 if (+messageInPath.dataset.senderId == activeUserId || activeChatId == activeUserId) {
-                    buildContextMenu(e.clientX, e.clientY, [[
+                    buildContextMenu(e.clientX, e.clientY, [...additionalActionsGroups, [
                         {
                             label: 'Delete message',
                             onselect: function() {
@@ -102,7 +120,7 @@ window.chatsPageScript = async function chatsPageScript() {
                     }
                 }
                 if (messageIdsToDelete.length > 0) {
-                    buildContextMenu(e.clientX, e.clientY, [[
+                    buildContextMenu(e.clientX, e.clientY, [...additionalActionsGroups, [
                         {
                             label: 'Delete selected',
                             onselect: function() {
@@ -155,11 +173,34 @@ window.chatsPageScript = async function chatsPageScript() {
 
     let messageInput = document.getElementById('message-input');
 
-    window.addEventListener('paste', function(e) {
+    let attachment = null;
+
+    window.addEventListener('paste', async function(e) {
         for (item of e.clipboardData.items) {
             if (item.type == 'image/png') {
-                window.file = item.getAsFile();
-                console.log(file.arrayBuffer().then(a => window.A = a));
+                let imageFile = item.getAsFile();
+                // Probably will need to use array buffer to send binary data to server on sending message.
+                // Importand moment is that function that sends message will not have the access to this variable.
+                // The solution is to make it's scope wider as activeChatId for example.
+                // let arrayBuffer = await imageFile.arrayBuffer();
+                let blobUrl = URL.createObjectURL(imageFile);
+                let attachmentImage = document.createElement('img');
+                attachmentImage.className = 'input-attachment';
+                attachmentImage.title = 'Click to remove';
+                attachmentImage.src = blobUrl;
+                attachmentImage.addEventListener('click', function() {
+                    attachment = null;
+                    document.getElementById('attachments').removeChild(attachmentImage);
+                });
+                document.getElementById('attachments').appendChild(attachmentImage);
+
+
+                let reader = new FileReader();
+                reader.readAsDataURL(imageFile);
+                reader.onload = function() {
+                    attachment = reader.result.slice(reader.result.indexOf(',') + 1);
+                    console.log(attachment);
+                };
                 e.preventDefault();
             }
         }
@@ -240,11 +281,11 @@ window.chatsPageScript = async function chatsPageScript() {
     });
     let sendingMessage = false;
     messagesQueue = [];
-    async function putMessageToSendingQueue(chatId, messageText) {
+    async function putMessageToSendingQueue(chatId, messageText, attachments) {
         if (!sendingMessage) {
             sendingMessage = true;
             try {
-                let response = await sendMessage(chatId, messageText);
+                let response = await sendMessage(chatId, messageText, attachments);
                 let responseData = await response.json();
                 if (responseData.error) {
                     throw responseData.error;
@@ -256,7 +297,7 @@ window.chatsPageScript = async function chatsPageScript() {
             if (messagesQueue.length) {
                 let messageToSend = messagesQueue[0];
                 messagesQueue = messagesQueue.slice(1);
-                putMessageToSendingQueue(messageToSend.chatId, messageToSend.messageText);
+                putMessageToSendingQueue(messageToSend.chatId, messageToSend.messageText, attachments);
             }
         } else {
             messagesQueue.push({
@@ -273,7 +314,9 @@ window.chatsPageScript = async function chatsPageScript() {
             let trimmedMessageText = this.innerText.trim();
             if (trimmedMessageText != '') {
                 this.innerText = '';
-                putMessageToSendingQueue(activeChatId, trimmedMessageText);
+                putMessageToSendingQueue(activeChatId, trimmedMessageText, attachment ? [attachment] : null);
+                attachment = null;
+                document.getElementById('attachments').innerHTML = '';
             }
         }
     });
@@ -492,13 +535,41 @@ window.chatsPageScript = async function chatsPageScript() {
                         }
                         let messageElement = document.createElement('div');
                         messageElement.classList = 'message';
-                        messageElement.innerHTML = urlify(messages[messageItr2].text);
+                        if (messages[messageItr2].attachments && messages[messageItr2].attachments.length) {
+                            messageElement.classList.add('with-attachments');
+
+                            let textBlock = document.createElement('div');
+                            textBlock.className = 'message-text';
+                            textBlock.innerHTML = urlify(messages[messageItr2].text);
+
+                            let attachmentBlock = document.createElement('div');
+                            attachmentBlock.className = 'message-attachment';
+
+                            let attachmentContent = await getAttachment(messages[messageItr2].attachments[0].hash);
+
+                            let blobId = parseInt(Math.random() * 100000).toString();
+                            blobs.set(blobId, attachmentContent);
+
+                            let imageElement = document.createElement('img');
+                            imageElement.className = 'image-attachment';
+                            imageElement.dataset.blobId = blobId;
+                            imageElement.src = URL.createObjectURL(attachmentContent);
+
+                            attachmentBlock.appendChild(imageElement);
+
+                            messageElement.appendChild(textBlock);
+                            messageElement.appendChild(attachmentBlock);
+                        } else {
+                            messageElement.innerHTML = urlify(messages[messageItr2].text);
+                        }
                         messageElement.dataset.chatId = messages[messageItr2].chatId;
                         messageElement.dataset.messageId = messages[messageItr2].id;
                         messageElement.dataset.senderId = messages[messageItr2].senderId;
                         messageElement.dataset.ts = messages[messageItr2].ts;
                         messageElement.addEventListener('click', function(e) {
-                            if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
+                            let somethingSelected = window.getSelection().type == 'Range';
+                            let clickOnLink = e.composedPath().find((element) => element.tagName == 'A');
+                            if (!somethingSelected && !clickOnLink) {
                                 this.classList.toggle('selectedMessage');
                             }
                         });
@@ -595,7 +666,9 @@ window.chatsPageScript = async function chatsPageScript() {
             messageElement.dataset.senderId = newMessage.senderId;
             messageElement.dataset.ts = newMessage.ts;
             messageElement.addEventListener('click', function(e) {
-                if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
+                let somethingSelected = window.getSelection().type == 'Range';
+                let clickOnLink = e.composedPath().find((element) => element.tagName == 'A');
+                if (!somethingSelected && !clickOnLink) {
                     this.classList.toggle('selectedMessage');
                 }
             });
@@ -648,7 +721,9 @@ window.chatsPageScript = async function chatsPageScript() {
                         messageElement.dataset.senderId = newMessage.senderId;
                         messageElement.dataset.ts = newMessage.ts;
                         messageElement.addEventListener('click', function(e) {
-                            if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
+                            let somethingSelected = window.getSelection().type == 'Range';
+                            let clickOnLink = e.composedPath().find((element) => element.tagName == 'A');
+                            if (!somethingSelected && !clickOnLink) {
                                 this.classList.toggle('selectedMessage');
                             }
                         });
@@ -794,7 +869,9 @@ window.chatsPageScript = async function chatsPageScript() {
                 messageElement.dataset.senderId = oldMessage.senderId;
                 messageElement.dataset.ts = oldMessage.ts;
                 messageElement.addEventListener('click', function(e) {
-                    if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
+                    let somethingSelected = window.getSelection().type == 'Range';
+                    let clickOnLink = e.composedPath().find((element) => element.tagName == 'A');
+                    if (!somethingSelected && !clickOnLink) {
                         this.classList.toggle('selectedMessage');
                     }
                 });
@@ -847,7 +924,9 @@ window.chatsPageScript = async function chatsPageScript() {
                             messageElement.dataset.senderId = oldMessage.senderId;
                             messageElement.dataset.ts = oldMessage.ts;
                             messageElement.addEventListener('click', function(e) {
-                                if (window.getSelection().type != 'Range' && !e.composedPath().find(element => element.tagName == 'A')) {
+                                let somethingSelected = window.getSelection().type == 'Range';
+                                let clickOnLink = e.composedPath().find((element) => element.tagName == 'A');
+                                if (!somethingSelected && !clickOnLink) {
                                     this.classList.toggle('selectedMessage');
                                 }
                             });
@@ -1383,7 +1462,7 @@ window.chatsPageScript = async function chatsPageScript() {
         document.body.addEventListener('click', removeContextMenuElement);
     }
 
-    function sendMessage(chatId, text) {
+    function sendMessage(chatId, text, attachments) {
         return fetch('/sendMessage', {
             method: 'POST',
             headers: {
@@ -1392,7 +1471,8 @@ window.chatsPageScript = async function chatsPageScript() {
             },
             body: JSON.stringify({
                 chatId: chatId,
-                text: text
+                text: text,
+                attachments: attachments
             })
         });
     }
@@ -1492,6 +1572,11 @@ window.chatsPageScript = async function chatsPageScript() {
             throw parsed;
         }
         return parsed.success;
+    }
+
+    async function getAttachment(hash) {
+        let response = await fetch(`/attachment?hash=${hash}`);
+        return await response.blob();
     }
 
     function deleteCookie(cookieName) {
