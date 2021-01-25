@@ -389,6 +389,7 @@ func (db *DB) AddAttachment(chatId, messageId int, attachmentType, hash string) 
 		"VALUES (?, ?, ?, ?)"
 	_, err := db.Conn.Exec(query, chatId, messageId, attachmentType, hash)
 	if err != nil {
+		log.Println(err)
 		return false
 	}
 

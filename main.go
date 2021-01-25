@@ -296,6 +296,7 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	defer db.Close()
+	attachmentsWaitGroup := sync.WaitGroup{}
 
 	var params struct {
 		ChatId      *int      `json:"chatId"`
@@ -308,7 +309,6 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 		io.WriteString(response, `{"error":"Invalid request body"}`)
 		return
 	}
-	log.Printf("%+v\n", params)
 
 	if params.ChatId == nil || params.Text == nil {
 		io.WriteString(response, `{"error":"Incorrect params"}`)
@@ -334,7 +334,6 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 		Hash        string `json:"hash"`
 	}
 	var attachments []Attachment
-	// attachments := make([]Attachment, 0)
 	if params.Attachments != nil {
 		attachmentsCount := len(*params.Attachments)
 		if attachmentsCount > 0 {
@@ -357,10 +356,17 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 				hash := sha256.Sum256([]byte(stringToEncode))
 				hashString := hex.EncodeToString(hash[:])
 
-				filePath := fmt.Sprintf("attachments/%s", hashString)
-				go ioutil.WriteFile(filePath, binaryAttachment, 0755)
+				attachmentsWaitGroup.Add(2)
+				go func() {
+					filePath := fmt.Sprintf("attachments/%s", hashString)
+					ioutil.WriteFile(filePath, binaryAttachment, 0755)
+					attachmentsWaitGroup.Done()
+				}()
 
-				go db.AddAttachment(*params.ChatId, messageId, attachmentContentType, hashString)
+				go func() {
+					db.AddAttachment(*params.ChatId, messageId, attachmentContentType, hashString)
+					attachmentsWaitGroup.Done()
+				}()
 
 				attachment := Attachment{
 					ContentType: attachmentContentType,
@@ -413,6 +419,8 @@ func handleSendMessage(response http.ResponseWriter, request *http.Request) {
 
 		eventBus.Mutex.Unlock()
 	}
+
+	attachmentsWaitGroup.Wait()
 }
 
 func handleGetMessages(response http.ResponseWriter, request *http.Request) {
